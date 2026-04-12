@@ -78,7 +78,7 @@
 		meta: tableMapperValues(sourceData, ['name', 'action'])
 	};
 
-	function submitCustomCharge(event: Event) {
+	function submitBoostCharge(event: Event) {
 		event.preventDefault();
 		const ampsValue = Number(
 			(document.getElementById('range-slider-amps') as HTMLInputElement)?.value
@@ -86,7 +86,6 @@
 		const socRangeValue = Number(
 			(document.getElementById('range-slider-boost-soc') as HTMLInputElement)?.value
 		);
-		const ecoCheckbox = (document.getElementById('eco') as HTMLInputElement)?.checked;
 
 		const chargePayload = {
 			cmd: {
@@ -94,7 +93,7 @@
 					Charge: {
 						// maybe use ChargeOptions interface here?
 						amps: ampsValue, // can be null
-						eco: ecoCheckbox,
+						eco: false ,  // Boost always sends eco = false
 						soc_limit: socRangeValue
 					}
 				}
@@ -104,6 +103,30 @@
 		console.log('Testing charge payload' + JSON.stringify(chargePayload));
 		// Send the payload as a JSON string
 		// {"cmd":{"SetMode":{"Charge":{"amps":90,"eco":false,"soc_limit":16}}}}
+		socket.send(JSON.stringify(chargePayload));
+	}
+
+	function submitChargeOnSolar(event: Event) {
+		event.preventDefault();
+		const ampsValue = Number(
+			(document.getElementById('range-slider-amps') as HTMLInputElement)?.value
+		);
+		const socRangeValue = Number(
+			(document.getElementById('range-slider-boost-soc') as HTMLInputElement)?.value
+		);
+
+		const chargePayload = {
+			cmd: {
+				SetMode: {
+					Charge: {
+						amps: ampsValue,
+						eco: true, // Always true for Charge on Solar
+						soc_limit: socRangeValue
+					}
+				}
+			}
+		};
+
 		socket.send(JSON.stringify(chargePayload));
 	}
 
@@ -156,7 +179,8 @@
 				});
 			}
 			if (message.Mode) {
-				// update mode buttons etc
+				value = message.Mode; // Update displayed mode from charger
+				console.log('Mode received from charger:', value);
 			}
 		});
 	}
@@ -195,21 +219,19 @@
 <div class=" container mx-auto px-4 flex flex-wrap gap-2 md:grid-cols-3">
 	<div class="w-80 grow md:grow-0 card p-10">
 		<h2>Operational Mode: {value}</h2>
+		<div class="h-4" />
 
 		<!--idle-->
 		<!-- Self Use -->
 		<div
 			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col gap-2"
 		>
-
-			<div class="flex justify-between items-center mb-4">
-				<button on:click={submitCustomCharge} class="btn variant-filled" type="submit">
-					Black Button Sample
-				</button>
+			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+				Battery Modes
 			</div>
+
 			<button
-				class="btn flex-1 border
-					{value === 'Idle' ? 'border-primary-500 bg-primary-100 dark:bg-primary-900' : 'border-surface-300'}"
+				class="btn variant-filled {value === 'Idle' ? 'variant-filled-primary' : ''}"
 				on:click={() => {
 					value = 'Idle';
 					radioModeChange(new Event('click'));
@@ -218,9 +240,10 @@
 				Idle
 			</button>
 
+			<div class="h-4" />
+
 			<button
-				class="btn flex-1 border
-					{value === 'V2h' ? 'border-primary-500 bg-primary-100 dark:bg-primary-900' : 'border-surface-300'}"
+				class="btn variant-filled {value === 'V2h' ? 'variant-filled-primary' : ''}"
 				on:click={() => {
 					value = 'V2h';
 					radioModeChange(new Event('click'));
@@ -332,17 +355,23 @@
 			</div>
 		</div>
 
+		<div class="h-4" />
+
 		<!-- Boost Section -->
 		<div
 			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800"
 		>
+			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+				Charge Only
+			</div>
+
 			<div class="flex justify-between items-center mb-4">
-				<button on:click={submitCustomCharge} class="btn variant-filled" type="submit">
+				<button on:click={submitBoostCharge} class="btn variant-filled" type="submit">
 					Boost
 				</button>
 			</div>
 			<div class="flex justify-between items-center mb-4">
-				<button on:click={submitCustomCharge} class="btn variant-filled" type="submit">
+				<button on:click={submitChargeOnSolar} class="btn variant-filled" type="submit">
 					Charge On Solar
 				</button>
 			</div>
@@ -374,12 +403,6 @@
 					<div class="text-xs">{amps_value} / 16</div>
 				</div>
 			</RangeSlider>
-
-			<label for="eco" title="Permits charge to vehicle from exported energy only"
-				>Solar Economy:
-				<input type="checkbox" id="eco" name="eco" />
-			</label>
-
 
 		</div>
 
