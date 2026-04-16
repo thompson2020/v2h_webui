@@ -221,13 +221,10 @@
 		<h2>Operational Mode: {value}</h2>
 		<div class="h-4" />
 
-		<!--idle-->
-		<!-- Self Use -->
-		<div
-			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col gap-2"
-		>
-			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-				Battery Modes
+		<!-- Off Button - Separate box at the top -->
+		<div class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col items-center">
+			<div class="mt-1 text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+				EV Power
 			</div>
 
 			<button
@@ -237,10 +234,17 @@
 					radioModeChange(new Event('click'));
 				}}
 			>
-				Idle
+				Off
 			</button>
+		</div>
 
-			<div class="h-4" />
+		<!--Smart Modes-->
+		<div
+			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col items-center"
+		>
+			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+				Smart Self-Powered
+			</div>
 
 			<button
 				class="btn variant-filled {value === 'V2h' ? 'variant-filled-primary' : ''}"
@@ -249,7 +253,7 @@
 					radioModeChange(new Event('click'));
 				}}
 			>
-				Self-Use
+				On
 			</button>
 
 			<div class="mt-3">
@@ -263,15 +267,14 @@
 				<RangeSlider bind:values={soc_range_v2h} min={0} max={100} step={1} range />
 			</div>
 
-			<!-- Time based -->
+			<!-- Options -->
 			<div class="mt-4 flex flex-col gap-3">
-				<!-- Off-Peak Charging -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Charge when cheap rate is available"> Off-Peak Charging </span>
 
+				<!-- Self-Use -->
+				<div class="flex justify-between items-center text-sm">
+					<span title="Discharge battery to off-set house use "> Self-Use </span>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
-
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -287,35 +290,11 @@
 					</label>
 				</div>
 
-				<!-- Smart Charge -->
+				<!-- Export Excess Solar -->
 				<div class="flex justify-between items-center text-sm">
-					<span title="Charge when additional cheap slots are available"> Smart Charge </span>
-
+					<span title="Allow excess solar to be exported "> Export Excess Solar </span>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" />
-
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
-					</label>
-				</div>
-
-				<!-- Smart Export -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Export when price is high"> Smart Export </span>
-
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" />
-
+						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -334,10 +313,8 @@
 				<!-- EV Drain Protection -->
 				<div class="flex justify-between items-center text-sm">
 					<span title="Don’t empty battery into EV charger"> EV Drain Protection </span>
-
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
-
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -352,59 +329,156 @@
 						/>
 					</label>
 				</div>
+
+				<!-- Time/Event-Based Controls -->
+				<div class="mt-3 mb-0 text-xs font-semibold text-surface-500 dark:text-surface-400 mb-3">
+					Time / Event Based Controls
+				</div>
+
+				<!-- Ready to Drive -->
+				<div class="flex justify-between items-center text-sm">
+					<span title="Specify when to vehicle to be charged by"> Ready to Drive </span>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
+						<div
+							class="
+							w-9 h-5 bg-surface-300 rounded-full peer
+							peer-checked:bg-primary-500
+							after:content-['']
+							after:absolute after:top-[2px] after:left-[2px]
+							after:bg-white after:rounded-full
+							after:h-4 after:w-4
+							after:transition-all
+							peer-checked:after:translate-x-4
+						"
+						/>
+					</label>
+				</div>
+
+				<!-- Off-Peak Charging -->
+				<div class="flex justify-between items-center text-sm">
+					<span title="Charge when cheap rate is available"> Off-Peak Charging </span>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
+						<div
+							class="
+							w-9 h-5 bg-surface-300 rounded-full peer
+							peer-checked:bg-primary-500
+							after:content-['']
+							after:absolute after:top-[2px] after:left-[2px]
+							after:bg-white after:rounded-full
+							after:h-4 after:w-4
+							after:transition-all
+							peer-checked:after:translate-x-4
+						"
+						/>
+					</label>
+				</div>
+
+				<!-- Smart Charge -->
+				<div class="flex justify-between items-center text-sm">
+					<span title="Charge when additional cheap slots are available"> Smart Charge </span>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" />
+						<div
+							class="
+							w-9 h-5 bg-surface-300 rounded-full peer
+							peer-checked:bg-primary-500
+							after:content-['']
+							after:absolute after:top-[2px] after:left-[2px]
+							after:bg-white after:rounded-full
+							after:h-4 after:w-4
+							after:transition-all
+							peer-checked:after:translate-x-4
+						"
+						/>
+					</label>
+				</div>
+
+				<!-- Smart Export -->
+				<div class="flex justify-between items-center text-sm">
+					<span title="Export when price is high"> Smart Export </span>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" />
+						<div
+							class="
+							w-9 h-5 bg-surface-300 rounded-full peer
+							peer-checked:bg-primary-500
+							after:content-['']
+							after:absolute after:top-[2px] after:left-[2px]
+							after:bg-white after:rounded-full
+							after:h-4 after:w-4
+							after:transition-all
+							peer-checked:after:translate-x-4
+						"
+						/>
+					</label>
+				</div>
+
+
+
+
+
+
+
 			</div>
 		</div>
 
 		<div class="h-4" />
 
 		<!-- Boost Section -->
-		<div
-			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800"
-		>
-			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-				Charge Only
-			</div>
+		        <!-- Boost Section -->
+        <div class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800">
 
-			<div class="flex justify-between items-center mb-4">
-				<button on:click={submitBoostCharge} class="btn variant-filled" type="submit">
-					Boost
-				</button>
-			</div>
-			<div class="flex justify-between items-center mb-4">
-				<button on:click={submitChargeOnSolar} class="btn variant-filled" type="submit">
-					Charge On Solar
-				</button>
-			</div>
+            <div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+                Charge
+            </div>
 
-			<RangeSlider
-				name="soc"
-				id="range-slider-boost-soc"
-				bind:value={soc_range_value}
-				min={10}
-				max={100}
-				step={5}
-				ticked
-			>
-				<div class="flex justify-between items-center">
-					<div class="font-bold">SoC</div>
-					<div class="text-xs">{soc_range_value} / 100</div>
-				</div>
-			</RangeSlider>
-			<RangeSlider
-				name="amps"
-				id="range-slider-amps"
-				bind:value={amps_value}
-				max={16}
-				step={1}
-				ticked
-			>
-				<div class="flex justify-between items-center">
-					<div class="font-bold">Amps</div>
-					<div class="text-xs">{amps_value} / 16</div>
-				</div>
-			</RangeSlider>
+			<button 
+				class="btn variant-filled flex justify-between items-center mb-4"
+				on:click={submitBoostCharge}>
+				Boost
+			</button>
 
-		</div>
+			<button 
+				class="btn variant-filled flex justify-between items-center mb-4"
+				on:click={submitChargeOnSolar}>
+				Charge On Solar
+			</button>
+				
+
+
+            <!-- Keep your sliders and checkbox as they are -->
+            <RangeSlider
+                name="soc"
+                id="range-slider-boost-soc"
+                bind:value={soc_range_value}
+                min={10}
+                max={100}
+                step={5}
+                ticked
+            >
+                <div class="flex justify-between items-center">
+                    <div class="font-bold">SoC</div>
+                    <div class="text-xs">{soc_range_value} / 100</div>
+                </div>
+            </RangeSlider>
+
+            <RangeSlider
+                name="amps"
+                id="range-slider-amps"
+                bind:value={amps_value}
+                max={16}
+                step={1}
+                ticked
+            >
+                <div class="flex justify-between items-center">
+                    <div class="font-bold">Amps</div>
+                    <div class="text-xs">{amps_value} / 16</div>
+                </div>
+            </RangeSlider>
+
+        </div>
 
 		<br />
 	</div>
