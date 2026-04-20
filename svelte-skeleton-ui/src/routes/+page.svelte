@@ -55,10 +55,14 @@
 
 	//Auto/Load Balancing + Time Based + Event Based(Charge)e.g Additional Slots + Event Based Discharge (High export price)
 	let soc_range_v2h = [31, 90];
-	let offPeak = false;
-	let smartCharge = false;
-	let smartExport = false;
+	let selfUse = true;
+	let exportExcessSolar = false;
 	let evDrainProtection = false;
+
+	let readyToDrive = false;
+	let OffPeakCharging = true;
+	let smartCharge = true;
+	let smartExport = false;
 
 	//Boost variables
 	let amps_value = 16; // hardware max
@@ -274,7 +278,7 @@
 				<div class="flex justify-between items-center text-sm">
 					<span title="Discharge battery to off-set house use "> Self-Use </span>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
+						<input type="checkbox" bind:checked={selfUse} class="sr-only peer" />
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -294,7 +298,7 @@
 				<div class="flex justify-between items-center text-sm">
 					<span title="Allow excess solar to be exported "> Export Excess Solar </span>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
+						<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" />
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -339,7 +343,7 @@
 				<div class="flex justify-between items-center text-sm">
 					<span title="Specify when to vehicle to be charged by"> Ready to Drive </span>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
+						<input type="checkbox" bind:checked={readyToDrive} class="sr-only peer" />
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
@@ -359,7 +363,7 @@
 				<div class="flex justify-between items-center text-sm">
 					<span title="Charge when cheap rate is available"> Off-Peak Charging </span>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={offPeak} class="sr-only peer" />
+						<input type="checkbox" bind:checked={OffPeakCharging} class="sr-only peer" />
 						<div
 							class="
 							w-9 h-5 bg-surface-300 rounded-full peer
