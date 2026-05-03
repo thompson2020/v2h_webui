@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.postcss';
 	import { AppShell, AppBar, LightSwitch } from '@skeletonlabs/skeleton';
+	import { operationalMode } from '$lib/stores';
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	// Highlight JS
@@ -22,7 +23,7 @@
 		<!-- App Bar -->
 		<AppBar>
 			<svelte:fragment slot="lead">
-				<strong class="text-xl uppercase">CHAdeMO V2h</strong>
+				<strong class="text-xl uppercase">CHAdeMO V2h{$operationalMode ? ` - ${$operationalMode}` : ''}</strong>
 			</svelte:fragment>
 			<svelte:fragment slot="trail">
 				{#if $page.url.pathname === '/'}

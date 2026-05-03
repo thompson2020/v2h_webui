@@ -16,6 +16,7 @@
 	import { tableMapperValues } from '@skeletonlabs/skeleton';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
+	import { operationalMode } from '$lib/stores';
 
 	interface RangeSliderProps {
 		value: number;
@@ -44,10 +45,17 @@
 	interface RealTimeData {
 		time?: string;
 		soc?: number;
-		state?: string;
+		state?: string | object;
+		requested_amps?: number;
+		dc_kw?: number;
+		volts?: number;
 		temp?: number;
-		fan?: number;
 		amps?: number;
+		fan?: number;
+		meter_kw?: number;
+		phase_w?: number | null;
+		smart_charge?: boolean;
+		ev_drain_protection?: boolean;
 	}
 
 	let socket: WebSocket;
@@ -69,6 +77,7 @@
 	let soc_range_value = 90; // default
 	let value = '';
 	let wsInterval = 0;
+	$: operationalMode.set(value);
 
 	let eventData = writable<EventData[]>([]);
 	let realTimeData = writable<RealTimeData[]>([]);
@@ -220,32 +229,24 @@
 </script>
 
 <br />
-<div class=" container mx-auto px-4 flex flex-wrap gap-2 md:grid-cols-3">
-	<div class="w-80 grow md:grow-0 card p-10">
-		<h2>Operational Mode: {value}</h2>
-		<div class="h-4" />
+<div class="container mx-auto px-4 flex flex-wrap gap-2">
 
-		<!-- Off Button - Separate box at the top -->
-		<div class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col items-center">
-			<div class="mt-1 text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-				EV Power
-			</div>
-
-			<button
-				class="btn variant-filled {value === 'Idle' ? 'variant-filled-primary' : ''}"
-				on:click={() => {
-					value = 'Idle';
-					radioModeChange(new Event('click'));
-				}}
-			>
-				Off
-			</button>
-		</div>
-
-		<!--Smart Modes-->
-		<div
-			class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800 flex-col items-center"
+	<!-- EV Power Card -->
+	<div class="card p-4">
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">EV Power</div>
+		<button
+			class="btn variant-filled {value === 'Idle' ? 'variant-filled-primary' : ''}"
+			on:click={() => {
+				value = 'Idle';
+				radioModeChange(new Event('click'));
+			}}
 		>
+			Off
+		</button>
+	</div>
+
+	<!--Smart Self-Powered Card-->
+	<div class="card p-4">
 			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
 				Smart Self-Powered
 			</div>
@@ -428,65 +429,57 @@
 			</div>
 		</div>
 
-		<div class="h-4" />
+	<!-- Charge Card -->
+	<div class="card p-4">
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">Charge</div>
 
-		<!-- Boost Section -->
-		        <!-- Boost Section -->
-        <div class="border border-surface-300 dark:border-surface-600 rounded-container-token p-4 bg-surface-100 dark:bg-surface-800">
+		<button
+			class="btn variant-filled flex justify-between items-center mb-4"
+			on:click={submitBoostCharge}>
+			Boost
+		</button>
 
-            <div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-                Charge
-            </div>
+		<button
+			class="btn variant-filled flex justify-between items-center mb-4"
+			on:click={submitChargeOnSolar}>
+			Charge On Solar
+		</button>
 
-			<button 
-				class="btn variant-filled flex justify-between items-center mb-4"
-				on:click={submitBoostCharge}>
-				Boost
-			</button>
+		<RangeSlider
+			name="soc"
+			id="range-slider-boost-soc"
+			bind:value={soc_range_value}
+			min={10}
+			max={100}
+			step={5}
+			ticked
+		>
+			<div class="flex justify-between items-center">
+				<div class="font-bold">SoC</div>
+				<div class="text-xs">{soc_range_value} / 100</div>
+			</div>
+		</RangeSlider>
 
-			<button 
-				class="btn variant-filled flex justify-between items-center mb-4"
-				on:click={submitChargeOnSolar}>
-				Charge On Solar
-			</button>
-				
-
-
-            <!-- Keep your sliders and checkbox as they are -->
-            <RangeSlider
-                name="soc"
-                id="range-slider-boost-soc"
-                bind:value={soc_range_value}
-                min={10}
-                max={100}
-                step={5}
-                ticked
-            >
-                <div class="flex justify-between items-center">
-                    <div class="font-bold">SoC</div>
-                    <div class="text-xs">{soc_range_value} / 100</div>
-                </div>
-            </RangeSlider>
-
-            <RangeSlider
-                name="amps"
-                id="range-slider-amps"
-                bind:value={amps_value}
-                max={16}
-                step={1}
-                ticked
-            >
-                <div class="flex justify-between items-center">
-                    <div class="font-bold">Amps</div>
-                    <div class="text-xs">{amps_value} / 16</div>
-                </div>
-            </RangeSlider>
-
-        </div>
-
-		<br />
+		<RangeSlider
+			name="amps"
+			id="range-slider-amps"
+			bind:value={amps_value}
+			max={16}
+			step={1}
+			ticked
+		>
+			<div class="flex justify-between items-center">
+				<div class="font-bold">Amps</div>
+				<div class="text-xs">{amps_value} / 16</div>
+			</div>
+		</RangeSlider>
 	</div>
-	<!-- </div> -->
+
+	<!-- Operational Mode Card -->
+	<div class="card p-4">
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">Operational Mode</div>
+		<div class="text-2xl font-bold">{value || '—'}</div>
+	</div>
 
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
 		<h2>Event Table</h2>
@@ -516,33 +509,51 @@
 		</div>
 	</div>
 
-	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
-		<h2>Log</h2>
-		<div class="table table-hover">
-			<table id="dataTable" class="table-container">
+</div>
+
+<div class="container mx-auto px-4 mt-2">
+	<div class="card p-4" style="max-height: 60vh; overflow-y: auto;">
+		<div style="overflow-x: auto;">
+			<table id="dataTable" style="white-space: nowrap; border-collapse: collapse; width: 100%;">
 				<thead>
-					<tr>
-						<th class="table-cell-fit">Localtime</th>
-						<th>SoC</th>
-						<th>State</th>
-						<th>Temperature</th>
-						<th>Fan duty</th>
-						<th>Amps</th>
+					<tr style="border-bottom: 2px solid var(--color-surface-400);">
+						<th class="p-2 text-left" rowspan="2">Time</th>
+						<th class="p-2 text-left text-primary-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">CHAdeMO</th>
+						<th class="p-2 text-left text-secondary-500" colspan="5" style="border-left: 1px solid var(--color-surface-400);">Pre</th>
+						<th class="p-2 text-left text-tertiary-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
+						<th class="p-2 text-left text-success-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
+					</tr>
+					<tr style="border-bottom: 1px solid var(--color-surface-300);">
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SoC</th>
+						<th class="p-2 text-left text-xs">State</th>
+						<th class="p-2 text-left text-xs">Req A</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">DC kW</th>
+						<th class="p-2 text-left text-xs">Volts</th>
+						<th class="p-2 text-left text-xs">Temp</th>
+						<th class="p-2 text-left text-xs">Amps</th>
+						<th class="p-2 text-left text-xs">Fan</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Total W</th>
+						<th class="p-2 text-left text-xs">Phase W</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Smart</th>
+						<th class="p-2 text-left text-xs">Drain Prot</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each $realTimeData as rtd}
 						<tr>
-							<td>{rtd.time}</td>
-							<td>{rtd.soc}%</td>
-							{#if typeof rtd.state === 'object'}
-								<td>{Object.keys(rtd.state)[0]}</td>
-							{:else}
-								<td>{rtd.state}</td>
-							{/if}
-							<td>{rtd.temp}ºC</td>
-							<td>{rtd.fan}%</td>
-							<td>{rtd.amps}A</td>
+							<td class="p-2">{rtd.time}</td>
+							<td class="p-2">{Math.round(rtd.soc ?? 0)}%</td>
+							<td class="p-2">{typeof rtd.state === 'object' && rtd.state !== null ? Object.keys(rtd.state)[0] : rtd.state}</td>
+							<td class="p-2">{(rtd.requested_amps ?? 0).toFixed(1)}A</td>
+							<td class="p-2">{(rtd.dc_kw ?? 0).toFixed(2)}</td>
+							<td class="p-2">{(rtd.volts ?? 0).toFixed(1)}V</td>
+							<td class="p-2">{(rtd.temp ?? 0).toFixed(1)}ºC</td>
+							<td class="p-2">{(rtd.amps ?? 0).toFixed(1)}A</td>
+							<td class="p-2">{Math.round(rtd.fan ?? 0)}%</td>
+							<td class="p-2">{Math.round(rtd.meter_kw ?? 0)}</td>
+							<td class="p-2">{rtd.phase_w != null ? Math.round(rtd.phase_w) + 'W' : '—'}</td>
+							<td class="p-2">{rtd.smart_charge ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.ev_drain_protection ? '✓' : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>
