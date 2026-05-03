@@ -68,15 +68,34 @@
 		soc?: number;
 		state?: string | object;
 		requested_amps?: number;
-		dc_kw?: number;
-		volts?: number;
-		temp?: number;
-		amps?: number;
-		fan?: number;
+		// PRE charger fields
+		pre_state?: string;
+		dc_volts_setpoint?: number;
+		dc_amps_setpoint?: number;
+		dc_output_volts?: number;
+		dc_output_amps?: number;
+		dc_w?: number;
+		dc_bus_volts?: number;
+		ac_volts?: number;
+		ac_amps?: number;
+		ac_w?: number;
+		pre_temp?: number;
+		pre_fan?: number;
+		pre_enabled?: boolean;
+		pre_status_ok?: boolean;
+		pre_status?: [number, number];
+		// Meter
 		meter_kw?: number;
 		phase_w?: number | null;
-		smart_charge?: boolean;
-		ev_drain_protection?: boolean;
+		// Supervisory
+		smart_charge_request?: boolean;
+		smart_charge_active?: boolean;
+		ev_drain_protection_request?: boolean;
+		ev_drain_protection_active?: boolean;
+		smart_export_request?: boolean;
+		smart_export_active?: boolean;
+		ready_to_drive_active?: boolean;
+		off_peak_charging_active?: boolean;
 		settings?: OperatorSettings;
 	}
 
@@ -101,6 +120,7 @@
 	let readyToDriveDays = [false, false, false, false, false, false, false]; // M T W T F S S
 	let showOffPeakOptions = false;
 	let showSmartChargeOptions = false;
+	let showEvDrainProtectionOptions = false;
 	let offPeakStart = '00:30';
 	let offPeakEnd = '04:30';
 	let v2hMaxAmps = 16;
@@ -115,6 +135,22 @@
 	let snapshotMode = '';
 	let snapshotSoc = 0;
 	let snapshotDcKw = 0;
+	let snapshotSmartChargeRequest = false;
+	let snapshotSmartChargeActive = false;
+	let snapshotEvDrainProtectionRequest = false;
+	let snapshotEvDrainProtectionActive = false;
+	let snapshotSmartExportRequest = false;
+	let snapshotSmartExportActive = false;
+	let snapshotReadyToDriveRequest = false;
+	let snapshotReadyToDriveActive = false;
+	let snapshotOffPeakChargingRequest = false;
+	let snapshotOffPeakChargingActive = false;
+	function ledClass(request: boolean, active: boolean): string {
+		if (active)  return 'inline-block w-2 h-2 rounded-full bg-success-500 ml-1.5 flex-shrink-0';
+		if (request) return 'inline-block w-2 h-2 rounded-full ring-1 ring-success-500 ml-1.5 flex-shrink-0';
+		return 'inline-block w-2 h-2 rounded-full bg-surface-400 ml-1.5 flex-shrink-0 opacity-30';
+	}
+
 	$: operationalMode.set(snapshotMode);
 
 	let eventData = writable<EventData[]>([]);
@@ -224,7 +260,17 @@
 					? Object.keys(rawState)[0]
 					: (rawState ?? '');
 				snapshotSoc = message.Data.soc ?? 0;
-				snapshotDcKw = message.Data.dc_kw ?? 0;
+				snapshotDcKw = message.Data.dc_w ?? 0;
+				snapshotSmartChargeRequest = message.Data.smart_charge_request ?? false;
+				snapshotSmartChargeActive = message.Data.smart_charge_active ?? false;
+				snapshotEvDrainProtectionRequest = message.Data.ev_drain_protection_request ?? false;
+				snapshotEvDrainProtectionActive = message.Data.ev_drain_protection_active ?? false;
+				snapshotSmartExportRequest = message.Data.smart_export_request ?? false;
+				snapshotSmartExportActive = message.Data.smart_export_active ?? false;
+				snapshotReadyToDriveRequest = message.Data.ready_to_drive_request ?? false;
+				snapshotReadyToDriveActive = message.Data.ready_to_drive_active ?? false;
+				snapshotOffPeakChargingRequest = message.Data.off_peak_charging_request ?? false;
+				snapshotOffPeakChargingActive = message.Data.off_peak_charging_active ?? false;
 				if (message.Data.settings) applySettings(message.Data.settings);
 			}
 		});
@@ -336,14 +382,6 @@
 				</label>
 			</div>
 
-			<div class="flex justify-between items-center text-sm">
-				<span title="Don't empty battery into EV charger"> EV Drain Protection </span>
-				<label class="relative inline-flex items-center cursor-pointer">
-					<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" on:change={sendSettings} />
-					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
-				</label>
-			</div>
-
 			<!-- Time/Event-Based Controls -->
 			<div class="mt-1 text-xs font-semibold text-surface-500 dark:text-surface-400">
 				Time / Event Based Controls
@@ -352,10 +390,11 @@
 			<div class="text-sm">
 				<div class="flex items-center justify-between">
 					<button type="button"
-						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
 						on:click={() => (showReadyToDriveOptions = !showReadyToDriveOptions)}>
 						<span class="text-xs w-3 text-center">{showReadyToDriveOptions ? '▼' : '▶'}</span>
 						<span>Ready to Drive</span>
+						<span class={ledClass(snapshotReadyToDriveRequest, snapshotReadyToDriveActive)}></span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={readyToDrive} class="sr-only peer" on:change={sendSettings} />
@@ -383,10 +422,11 @@
 			<div class="text-sm">
 				<div class="flex items-center justify-between">
 					<button type="button"
-						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
 						on:click={() => (showOffPeakOptions = !showOffPeakOptions)}>
 						<span class="text-xs w-3 text-center">{showOffPeakOptions ? '▼' : '▶'}</span>
 						<span>Off-Peak Charging</span>
+						<span class={ledClass(snapshotOffPeakChargingRequest, snapshotOffPeakChargingActive)}></span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={OffPeakCharging} class="sr-only peer" on:change={sendSettings} />
@@ -407,13 +447,19 @@
 				{/if}
 			</div>
 
+			<!-- Smart (MQTT-driven) Controls -->
+			<div class="mt-1 text-xs font-semibold text-surface-500 dark:text-surface-400">
+				Smart
+			</div>
+
 			<div class="text-sm">
 				<div class="flex items-center justify-between">
 					<button type="button"
-						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
 						on:click={() => (showSmartChargeOptions = !showSmartChargeOptions)}>
 						<span class="text-xs w-3 text-center">{showSmartChargeOptions ? '▼' : '▶'}</span>
 						<span>Smart Charge</span>
+						<span class={ledClass(snapshotSmartChargeRequest, snapshotSmartChargeActive)}></span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" on:change={sendSettings} />
@@ -430,10 +476,11 @@
 			<div class="text-sm">
 				<div class="flex items-center justify-between">
 					<button type="button"
-						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
 						on:click={() => (showSmartExportOptions = !showSmartExportOptions)}>
 						<span class="text-xs w-3 text-center">{showSmartExportOptions ? '▼' : '▶'}</span>
 						<span>Smart Export</span>
+						<span class={ledClass(snapshotSmartExportRequest, snapshotSmartExportActive)}></span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" on:change={sendSettings} />
@@ -453,6 +500,27 @@
 				{/if}
 			</div>
 
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
+						on:click={() => (showEvDrainProtectionOptions = !showEvDrainProtectionOptions)}>
+						<span class="text-xs w-3 text-center">{showEvDrainProtectionOptions ? '▼' : '▶'}</span>
+						<span>EV Drain Protection</span>
+						<span class={ledClass(snapshotEvDrainProtectionRequest, snapshotEvDrainProtectionActive)}></span>
+					</button>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" on:change={sendSettings} />
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+					</label>
+				</div>
+				{#if showEvDrainProtectionOptions}
+					<div class="mt-1 ml-4 text-xs text-surface-400">
+						Prevents discharge into EV charging load
+					</div>
+				{/if}
+			</div>
+
 		</div>
 	</div>
 
@@ -461,7 +529,7 @@
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">Charge</div>
 
 		<button
-			class="btn variant-filled flex justify-between items-center mb-4"
+			class="btn variant-filled flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'variant-filled-primary' : ''}"
 			on:click={submitCharge}>
 			Charge
 		</button>
@@ -513,7 +581,7 @@
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
 		<div class="text-2xl font-bold mb-4">{snapshotSoc.toFixed(1)}%</div>
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">{snapshotMode === 'V2h' ? 'Discharging' : snapshotMode === 'Charge' ? 'Charging' : 'Power'}</div>
-		<div class="text-2xl font-bold">{snapshotDcKw.toFixed(2)} kW</div>
+		<div class="text-2xl font-bold">{Math.round(snapshotDcKw)} W</div>
 	</div>
 
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
@@ -554,23 +622,31 @@
 					<tr style="border-bottom: 2px solid var(--color-surface-400);">
 						<th class="p-2 text-left" rowspan="2">Time</th>
 						<th class="p-2 text-left text-primary-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">CHAdeMO</th>
-						<th class="p-2 text-left text-secondary-500" colspan="5" style="border-left: 1px solid var(--color-surface-400);">Pre</th>
+						<th class="p-2 text-left text-secondary-500" colspan="12" style="border-left: 1px solid var(--color-surface-400);">Pre-Charger</th>
 						<th class="p-2 text-left text-tertiary-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
-						<th class="p-2 text-left text-success-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
+						<th class="p-2 text-left text-success-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
 					</tr>
 					<tr style="border-bottom: 1px solid var(--color-surface-300);">
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SoC</th>
 						<th class="p-2 text-left text-xs">State</th>
 						<th class="p-2 text-left text-xs">Req A</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">DC kW</th>
-						<th class="p-2 text-left text-xs">Volts</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">PRE State</th>
+						<th class="p-2 text-left text-xs">DC V SP</th>
+						<th class="p-2 text-left text-xs">DC A SP</th>
+						<th class="p-2 text-left text-xs">DC Out V</th>
+						<th class="p-2 text-left text-xs">DC Out A</th>
+						<th class="p-2 text-left text-xs">DC W</th>
+						<th class="p-2 text-left text-xs">DC Bus V</th>
+						<th class="p-2 text-left text-xs">AC V</th>
+						<th class="p-2 text-left text-xs">AC A</th>
+						<th class="p-2 text-left text-xs">AC W</th>
 						<th class="p-2 text-left text-xs">Temp</th>
-						<th class="p-2 text-left text-xs">Amps</th>
 						<th class="p-2 text-left text-xs">Fan</th>
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Total W</th>
 						<th class="p-2 text-left text-xs">Phase W</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Smart</th>
-						<th class="p-2 text-left text-xs">Drain Prot</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SC Req</th>
+						<th class="p-2 text-left text-xs">SE Req</th>
+						<th class="p-2 text-left text-xs">EDP Req</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -580,15 +656,23 @@
 							<td class="p-2">{Math.round(rtd.soc ?? 0)}%</td>
 							<td class="p-2">{typeof rtd.state === 'object' && rtd.state !== null ? Object.keys(rtd.state)[0] : rtd.state}</td>
 							<td class="p-2">{(rtd.requested_amps ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{(rtd.dc_kw ?? 0).toFixed(2)}</td>
-							<td class="p-2">{(rtd.volts ?? 0).toFixed(1)}V</td>
-							<td class="p-2">{(rtd.temp ?? 0).toFixed(1)}ºC</td>
-							<td class="p-2">{(rtd.amps ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{Math.round(rtd.fan ?? 0)}%</td>
+							<td class="p-2">{rtd.pre_state ?? '—'}</td>
+							<td class="p-2">{(rtd.dc_volts_setpoint ?? 0).toFixed(1)}V</td>
+							<td class="p-2">{(rtd.dc_amps_setpoint ?? 0).toFixed(1)}A</td>
+							<td class="p-2">{(rtd.dc_output_volts ?? 0).toFixed(1)}V</td>
+							<td class="p-2">{(rtd.dc_output_amps ?? 0).toFixed(1)}A</td>
+							<td class="p-2">{Math.round(rtd.dc_w ?? 0)}W</td>
+							<td class="p-2">{(rtd.dc_bus_volts ?? 0).toFixed(1)}V</td>
+							<td class="p-2">{(rtd.ac_volts ?? 0).toFixed(1)}V</td>
+							<td class="p-2">{(rtd.ac_amps ?? 0).toFixed(1)}A</td>
+							<td class="p-2">{Math.round(rtd.ac_w ?? 0)}W</td>
+							<td class="p-2">{(rtd.pre_temp ?? 0).toFixed(1)}ºC</td>
+							<td class="p-2">{Math.round(rtd.pre_fan ?? 0)}%</td>
 							<td class="p-2">{Math.round(rtd.meter_kw ?? 0)}</td>
 							<td class="p-2">{rtd.phase_w != null ? Math.round(rtd.phase_w) + 'W' : '—'}</td>
-							<td class="p-2">{rtd.smart_charge ? '✓' : '—'}</td>
-							<td class="p-2">{rtd.ev_drain_protection ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.smart_charge_request ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.smart_export_request ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.ev_drain_protection_request ? '✓' : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>
