@@ -42,6 +42,27 @@
 		action: string;
 	}
 
+	interface OperatorSettings {
+		v2h_soc_min:          number;
+		v2h_soc_max:          number;
+		v2h_max_amps:         number;
+		self_use:             boolean;
+		export_excess_solar:  boolean;
+		ev_drain_protection:  boolean;
+		ready_to_drive:       boolean;
+		ready_to_drive_time:  string;
+		ready_to_drive_days:  boolean[];
+		off_peak_charging:    boolean;
+		off_peak_start:       string;
+		off_peak_end:         string;
+		smart_charge:         boolean;
+		smart_export:         boolean;
+		smart_export_limit_w: number;
+		charge_soc_limit:     number;
+		charge_amps:          number;
+		charge_eco:           boolean;
+	}
+
 	interface RealTimeData {
 		time?: string;
 		soc?: number;
@@ -56,13 +77,15 @@
 		phase_w?: number | null;
 		smart_charge?: boolean;
 		ev_drain_protection?: boolean;
+		settings?: OperatorSettings;
 	}
 
 	let socket: WebSocket;
 	let time = '';
 
 	//Auto/Load Balancing + Time Based + Event Based(Charge)e.g Additional Slots + Event Based Discharge (High export price)
-	let soc_range_v2h = [31, 90];
+	let v2h_soc_min = 31;
+	let v2h_soc_max = 90;
 	let selfUse = true;
 	let exportExcessSolar = false;
 	let evDrainProtection = false;
@@ -82,12 +105,17 @@
 	let offPeakEnd = '04:30';
 	let v2hMaxAmps = 16;
 
-	//Boost variables
+	//Charge variables
 	let amps_value = 16; // hardware max
 	let soc_range_value = 90; // default
-	let value = '';
+	let chargeEco = false;
 	let wsInterval = 0;
-	$: operationalMode.set(value);
+
+	// Snapshot state — source of truth, populated from Data messages
+	let snapshotMode = '';
+	let snapshotSoc = 0;
+	let snapshotDcKw = 0;
+	$: operationalMode.set(snapshotMode);
 
 	let eventData = writable<EventData[]>([]);
 	let realTimeData = writable<RealTimeData[]>([]);
@@ -101,78 +129,71 @@
 		meta: tableMapperValues(sourceData, ['name', 'action'])
 	};
 
-	function submitBoostCharge(event: Event) {
-		event.preventDefault();
-		const ampsValue = Number(
-			(document.getElementById('range-slider-amps') as HTMLInputElement)?.value
-		);
-		const socRangeValue = Number(
-			(document.getElementById('range-slider-boost-soc') as HTMLInputElement)?.value
-		);
-
-		const chargePayload = {
+	function sendSettings() {
+		if (!socket || socket.readyState !== WebSocket.OPEN) return;
+		socket.send(JSON.stringify({
 			cmd: {
-				SetMode: {
-					Charge: {
-						// maybe use ChargeOptions interface here?
-						amps: ampsValue, // can be null
-						eco: false ,  // Boost always sends eco = false
-						soc_limit: socRangeValue
-					}
+				SetSettings: {
+					v2h_soc_min:          v2h_soc_min,
+					v2h_soc_max:          v2h_soc_max,
+					v2h_max_amps:         v2hMaxAmps,
+					self_use:             selfUse,
+					export_excess_solar:  exportExcessSolar,
+					ev_drain_protection:  evDrainProtection,
+					ready_to_drive:       readyToDrive,
+					ready_to_drive_time:  readyToDriveTime,
+					ready_to_drive_days:  readyToDriveDays,
+					off_peak_charging:    OffPeakCharging,
+					off_peak_start:       offPeakStart,
+					off_peak_end:         offPeakEnd,
+					smart_charge:         smartCharge,
+					smart_export:         smartExport,
+					smart_export_limit_w: smartExportLimit,
+					charge_soc_limit:     soc_range_value,
+					charge_amps:          amps_value,
+					charge_eco:           chargeEco,
 				}
 			}
-		};
-
-		console.log('Testing charge payload' + JSON.stringify(chargePayload));
-		// Send the payload as a JSON string
-		// {"cmd":{"SetMode":{"Charge":{"amps":90,"eco":false,"soc_limit":16}}}}
-		socket.send(JSON.stringify(chargePayload));
+		}));
 	}
 
-	function submitChargeOnSolar(event: Event) {
+	function applySettings(s: OperatorSettings) {
+		v2h_soc_min        = s.v2h_soc_min;
+		v2h_soc_max        = s.v2h_soc_max;
+		v2hMaxAmps         = s.v2h_max_amps;
+		selfUse            = s.self_use;
+		exportExcessSolar  = s.export_excess_solar;
+		evDrainProtection  = s.ev_drain_protection;
+		readyToDrive       = s.ready_to_drive;
+		readyToDriveTime   = s.ready_to_drive_time;
+		readyToDriveDays   = s.ready_to_drive_days;
+		OffPeakCharging    = s.off_peak_charging;
+		offPeakStart       = s.off_peak_start;
+		offPeakEnd         = s.off_peak_end;
+		smartCharge        = s.smart_charge;
+		smartExport        = s.smart_export;
+		smartExportLimit   = s.smart_export_limit_w;
+		soc_range_value    = s.charge_soc_limit;
+		amps_value         = s.charge_amps;
+		chargeEco          = s.charge_eco;
+	}
+
+	function submitCharge(event: Event) {
 		event.preventDefault();
-		const ampsValue = Number(
-			(document.getElementById('range-slider-amps') as HTMLInputElement)?.value
-		);
-		const socRangeValue = Number(
-			(document.getElementById('range-slider-boost-soc') as HTMLInputElement)?.value
-		);
-
-		const chargePayload = {
-			cmd: {
-				SetMode: {
-					Charge: {
-						amps: ampsValue,
-						eco: true, // Always true for Charge on Solar
-						soc_limit: socRangeValue
-					}
-				}
-			}
-		};
-
-		socket.send(JSON.stringify(chargePayload));
+		socket.send(JSON.stringify({
+			cmd: { SetMode: { Charge: { amps: amps_value, eco: chargeEco, soc_limit: soc_range_value } } }
+		}));
 	}
 
-	function radioModeChange(event: Event) {
-		let mode = value; // global fudge
-		let chargePayload = null;
+	function sendModeChange(mode: string) {
+		if (!socket || socket.readyState !== WebSocket.OPEN) return;
+		let payload;
 		if (mode === 'Discharge') {
-			const discharge_params: ChargeOptions = { soc_limit: soc_range_value, amps: amps_value };
-			chargePayload = { cmd: { SetMode: { Discharge: discharge_params } } };
+			payload = { cmd: { SetMode: { Discharge: { soc_limit: soc_range_value, amps: amps_value } } } };
 		} else {
-			chargePayload = {
-				cmd: {
-					SetMode: mode
-				}
-			};
+			payload = { cmd: { SetMode: mode } };
 		}
-		console.log(JSON.stringify(event));
-		console.log('Testing mode payload' + JSON.stringify(chargePayload));
-		// Send the payload as a JSON string
-		// {"cmd": {"SetMode": "V2h"}}
-		// {"cmd": {"SetMode": "Idle"}}
-		// {"cmd": {"SetMode": {"Discharge" : {amps: 10, soc_limit: 30, eco: null}}
-		socket.send(JSON.stringify(chargePayload));
+		socket.send(JSON.stringify(payload));
 	}
 	if (typeof WebSocket !== 'undefined') {
 		// Make this a singleton?
@@ -194,16 +215,17 @@
 			if (message.Data) {
 				message.Data.time = new Date().toLocaleTimeString();
 				realTimeData.update((items) => {
-					items.unshift(message.Data); // push into [0]
-					if (items.length > 80) {
-						items.pop();
-					}
+					items.unshift(message.Data);
+					if (items.length > 80) items.pop();
 					return items;
 				});
-			}
-			if (message.Mode) {
-				value = message.Mode; // Update displayed mode from charger
-				console.log('Mode received from charger:', value);
+				const rawState = message.Data.state;
+				snapshotMode = typeof rawState === 'object' && rawState !== null
+					? Object.keys(rawState)[0]
+					: (rawState ?? '');
+				snapshotSoc = message.Data.soc ?? 0;
+				snapshotDcKw = message.Data.dc_kw ?? 0;
+				if (message.Data.settings) applySettings(message.Data.settings);
 			}
 		});
 	}
@@ -245,13 +267,10 @@
 	<div class="card p-4">
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">EV Power</div>
 		<button
-			class="btn variant-filled {value === 'Idle' ? 'variant-filled-primary' : ''}"
-			on:click={() => {
-				value = 'Idle';
-				radioModeChange(new Event('click'));
-			}}
+			class="btn variant-filled {snapshotMode === 'Idle' ? 'variant-filled-primary' : ''}"
+			on:click={() => sendModeChange('Idle')}
 		>
-			Off
+			Idle
 		</button>
 	</div>
 
@@ -262,48 +281,35 @@
 		</div>
 
 		<button
-			class="btn variant-filled {value === 'V2h' ? 'variant-filled-primary' : ''}"
-			on:click={() => {
-				value = 'V2h';
-				radioModeChange(new Event('click'));
-			}}
+			class="btn variant-filled {snapshotMode === 'V2h' ? 'variant-filled-primary' : ''}"
+			on:click={() => sendModeChange('V2h')}
 		>
-			On
+			V2H
 		</button>
 
-		<!-- SOC Range: two sliders for min and max -->
-		<div class="mt-3 flex flex-col gap-1">
-			<RangeSlider
-				name="soc-min"
-				bind:value={soc_range_v2h[0]}
-				min={0}
-				max={soc_range_v2h[1]}
-				step={5}
-				ticked
-			>
-				<div class="flex justify-between items-center">
-					<div class="text-xs">Min SoC</div>
-					<div class="text-xs">{soc_range_v2h[0]}%</div>
-				</div>
-			</RangeSlider>
-			<RangeSlider
-				name="soc-max"
-				bind:value={soc_range_v2h[1]}
-				min={soc_range_v2h[0]}
-				max={100}
-				step={5}
-				ticked
-			>
-				<div class="flex justify-between items-center">
-					<div class="text-xs">Max SoC</div>
-					<div class="text-xs">{soc_range_v2h[1]}%</div>
-				</div>
-			</RangeSlider>
-		</div>
+			<!-- SOC Min -->
+			<div class="mt-2">
+				<RangeSlider name="soc-min" bind:value={v2h_soc_min} on:change={sendSettings} min={0} max={100} step={5} ticked>
+					<div class="flex justify-between items-center">
+						<div class="font-bold">SoC Min</div>
+						<div class="text-xs">{v2h_soc_min}%</div>
+					</div>
+				</RangeSlider>
+			</div>
+			<!-- SOC Max -->
+			<div class="mt-2">
+				<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
+					<div class="flex justify-between items-center">
+						<div class="font-bold">SoC Max</div>
+						<div class="text-xs">{v2h_soc_max}%</div>
+					</div>
+				</RangeSlider>
+			</div>
+
 
 		<!-- Max Amps -->
 		<div class="mt-2">
-			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} min={1} max={16} step={1} ticked>
+			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} on:change={sendSettings} min={1} max={16} step={1} ticked>
 				<div class="flex justify-between items-center">
 					<div class="text-xs">Max Amps</div>
 					<div class="text-xs">{v2hMaxAmps}A</div>
@@ -317,7 +323,7 @@
 			<div class="flex justify-between items-center text-sm">
 				<span title="Discharge battery to offset house use"> Self-Use </span>
 				<label class="relative inline-flex items-center cursor-pointer">
-					<input type="checkbox" bind:checked={selfUse} class="sr-only peer" />
+					<input type="checkbox" bind:checked={selfUse} class="sr-only peer" on:change={sendSettings} />
 					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 				</label>
 			</div>
@@ -325,7 +331,7 @@
 			<div class="flex justify-between items-center text-sm">
 				<span title="Allow excess solar to be exported"> Export Excess Solar </span>
 				<label class="relative inline-flex items-center cursor-pointer">
-					<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" />
+					<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" on:change={sendSettings} />
 					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 				</label>
 			</div>
@@ -333,7 +339,7 @@
 			<div class="flex justify-between items-center text-sm">
 				<span title="Don't empty battery into EV charger"> EV Drain Protection </span>
 				<label class="relative inline-flex items-center cursor-pointer">
-					<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
+					<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" on:change={sendSettings} />
 					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 				</label>
 			</div>
@@ -352,7 +358,7 @@
 						<span>Ready to Drive</span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={readyToDrive} class="sr-only peer" />
+						<input type="checkbox" bind:checked={readyToDrive} class="sr-only peer" on:change={sendSettings} />
 						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
@@ -360,13 +366,13 @@
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
 						<div class="flex justify-between items-center">
 							<span>Ready by</span>
-							<input type="time" bind:value={readyToDriveTime} class="input w-28 text-sm py-0.5 px-1" />
+							<input type="time" bind:value={readyToDriveTime} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" />
 						</div>
 						<div class="flex items-center gap-2">
 							{#each ['M','T','W','T','F','S','S'] as day, i}
 								<label class="flex flex-col items-center cursor-pointer">
 									<span class="text-xs mb-0.5">{day}</span>
-									<input type="checkbox" bind:checked={readyToDriveDays[i]} class="w-4 h-4 accent-primary-500" />
+									<input type="checkbox" bind:checked={readyToDriveDays[i]} class="w-4 h-4 accent-primary-500" on:change={sendSettings} />
 								</label>
 							{/each}
 						</div>
@@ -383,7 +389,7 @@
 						<span>Off-Peak Charging</span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={OffPeakCharging} class="sr-only peer" />
+						<input type="checkbox" bind:checked={OffPeakCharging} class="sr-only peer" on:change={sendSettings} />
 						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
@@ -391,11 +397,11 @@
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
 						<div class="flex justify-between items-center">
 							<span>Start</span>
-							<input type="time" bind:value={offPeakStart} class="input w-28 text-sm py-0.5 px-1" />
+							<input type="time" bind:value={offPeakStart} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" />
 						</div>
 						<div class="flex justify-between items-center">
 							<span>End</span>
-							<input type="time" bind:value={offPeakEnd} class="input w-28 text-sm py-0.5 px-1" />
+							<input type="time" bind:value={offPeakEnd} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" />
 						</div>
 					</div>
 				{/if}
@@ -410,7 +416,7 @@
 						<span>Smart Charge</span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" />
+						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" on:change={sendSettings} />
 						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
@@ -430,7 +436,7 @@
 						<span>Smart Export</span>
 					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" />
+						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" on:change={sendSettings} />
 						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
@@ -438,7 +444,7 @@
 					<div class="mt-2 ml-4 flex justify-between items-center text-surface-600 dark:text-surface-300">
 						<span>Export Limit</span>
 						<div class="flex items-center gap-1">
-							<input type="number" bind:value={smartExportLimit}
+							<input type="number" bind:value={smartExportLimit} on:change={sendSettings}
 								min="0" max="10000" step="100"
 								class="input w-20 text-right text-sm py-0.5 px-1" />
 							<span class="text-xs">W</span>
@@ -456,20 +462,15 @@
 
 		<button
 			class="btn variant-filled flex justify-between items-center mb-4"
-			on:click={submitBoostCharge}>
-			Boost
-		</button>
-
-		<button
-			class="btn variant-filled flex justify-between items-center mb-4"
-			on:click={submitChargeOnSolar}>
-			Charge On Solar
+			on:click={submitCharge}>
+			Charge
 		</button>
 
 		<RangeSlider
 			name="soc"
 			id="range-slider-boost-soc"
 			bind:value={soc_range_value}
+			on:change={sendSettings}
 			min={10}
 			max={100}
 			step={5}
@@ -485,6 +486,7 @@
 			name="amps"
 			id="range-slider-amps"
 			bind:value={amps_value}
+			on:change={sendSettings}
 			max={16}
 			step={1}
 			ticked
@@ -494,12 +496,24 @@
 				<div class="text-xs">{amps_value} / 16</div>
 			</div>
 		</RangeSlider>
+
+		<div class="mt-3 flex justify-between items-center text-sm">
+			<span title="Charge using solar power only">Eco (Use Solar Only)</span>
+			<label class="relative inline-flex items-center cursor-pointer">
+				<input type="checkbox" bind:checked={chargeEco} class="sr-only peer" on:change={sendSettings} />
+				<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+			</label>
+		</div>
 	</div>
 
 	<!-- Operational Mode Card -->
-	<div class="card p-4">
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">Operational Mode</div>
-		<div class="text-2xl font-bold">{value || '—'}</div>
+	<div class="card p-4 text-center">
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Status</div>
+		<div class="text-2xl font-bold mb-4">{snapshotMode || '—'}</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
+		<div class="text-2xl font-bold mb-4">{snapshotSoc.toFixed(1)}%</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">{snapshotMode === 'V2h' ? 'Discharging' : snapshotMode === 'Charge' ? 'Charging' : 'Power'}</div>
+		<div class="text-2xl font-bold">{snapshotDcKw.toFixed(2)} kW</div>
 	</div>
 
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
