@@ -71,6 +71,16 @@
 	let OffPeakCharging = true;
 	let smartCharge = true;
 	let smartExport = false;
+	let smartExportLimit = 2500;
+	let showSmartExportOptions = false;
+	let showReadyToDriveOptions = false;
+	let readyToDriveTime = '08:00';
+	let readyToDriveDays = [false, false, false, false, false, false, false]; // M T W T F S S
+	let showOffPeakOptions = false;
+	let showSmartChargeOptions = false;
+	let offPeakStart = '00:30';
+	let offPeakEnd = '04:30';
+	let v2hMaxAmps = 16;
 
 	//Boost variables
 	let amps_value = 16; // hardware max
@@ -247,187 +257,198 @@
 
 	<!--Smart Self-Powered Card-->
 	<div class="card p-4">
-			<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-				Smart Self-Powered
-			</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
+			Smart Self-Powered
+		</div>
 
-			<button
-				class="btn variant-filled {value === 'V2h' ? 'variant-filled-primary' : ''}"
-				on:click={() => {
-					value = 'V2h';
-					radioModeChange(new Event('click'));
-				}}
+		<button
+			class="btn variant-filled {value === 'V2h' ? 'variant-filled-primary' : ''}"
+			on:click={() => {
+				value = 'V2h';
+				radioModeChange(new Event('click'));
+			}}
+		>
+			On
+		</button>
+
+		<!-- SOC Range: two sliders for min and max -->
+		<div class="mt-3 flex flex-col gap-1">
+			<RangeSlider
+				name="soc-min"
+				bind:value={soc_range_v2h[0]}
+				min={0}
+				max={soc_range_v2h[1]}
+				step={5}
+				ticked
 			>
-				On
-			</button>
-
-			<div class="mt-3">
-				<div class="flex justify-between items-center mb-2">
-					<div class="text-sm font-bold">SOC Range</div>
-					<div class="text-xs">
-						{soc_range_v2h[0]}% → {soc_range_v2h[1]}%
-					</div>
+				<div class="flex justify-between items-center">
+					<div class="text-xs">Min SoC</div>
+					<div class="text-xs">{soc_range_v2h[0]}%</div>
 				</div>
+			</RangeSlider>
+			<RangeSlider
+				name="soc-max"
+				bind:value={soc_range_v2h[1]}
+				min={soc_range_v2h[0]}
+				max={100}
+				step={5}
+				ticked
+			>
+				<div class="flex justify-between items-center">
+					<div class="text-xs">Max SoC</div>
+					<div class="text-xs">{soc_range_v2h[1]}%</div>
+				</div>
+			</RangeSlider>
+		</div>
 
-				<RangeSlider bind:values={soc_range_v2h} min={0} max={100} step={1} range />
+		<!-- Max Amps -->
+		<div class="mt-2">
+			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} min={1} max={16} step={1} ticked>
+				<div class="flex justify-between items-center">
+					<div class="text-xs">Max Amps</div>
+					<div class="text-xs">{v2hMaxAmps}A</div>
+				</div>
+			</RangeSlider>
+		</div>
+
+		<!-- Options -->
+		<div class="mt-4 flex flex-col gap-3">
+
+			<div class="flex justify-between items-center text-sm">
+				<span title="Discharge battery to offset house use"> Self-Use </span>
+				<label class="relative inline-flex items-center cursor-pointer">
+					<input type="checkbox" bind:checked={selfUse} class="sr-only peer" />
+					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+				</label>
 			</div>
 
-			<!-- Options -->
-			<div class="mt-4 flex flex-col gap-3">
+			<div class="flex justify-between items-center text-sm">
+				<span title="Allow excess solar to be exported"> Export Excess Solar </span>
+				<label class="relative inline-flex items-center cursor-pointer">
+					<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" />
+					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+				</label>
+			</div>
 
-				<!-- Self-Use -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Discharge battery to off-set house use "> Self-Use </span>
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={selfUse} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
-					</label>
-				</div>
+			<div class="flex justify-between items-center text-sm">
+				<span title="Don't empty battery into EV charger"> EV Drain Protection </span>
+				<label class="relative inline-flex items-center cursor-pointer">
+					<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
+					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+				</label>
+			</div>
 
-				<!-- Export Excess Solar -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Allow excess solar to be exported "> Export Excess Solar </span>
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
-					</label>
-				</div>
+			<!-- Time/Event-Based Controls -->
+			<div class="mt-1 text-xs font-semibold text-surface-500 dark:text-surface-400">
+				Time / Event Based Controls
+			</div>
 
-				<!-- EV Drain Protection -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Don’t empty battery into EV charger"> EV Drain Protection </span>
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={evDrainProtection} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
-					</label>
-				</div>
-
-				<!-- Time/Event-Based Controls -->
-				<div class="mt-3 mb-0 text-xs font-semibold text-surface-500 dark:text-surface-400 mb-3">
-					Time / Event Based Controls
-				</div>
-
-				<!-- Ready to Drive -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Specify when to vehicle to be charged by"> Ready to Drive </span>
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						on:click={() => (showReadyToDriveOptions = !showReadyToDriveOptions)}>
+						<span class="text-xs w-3 text-center">{showReadyToDriveOptions ? '▼' : '▶'}</span>
+						<span>Ready to Drive</span>
+					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={readyToDrive} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
+				{#if showReadyToDriveOptions}
+					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<div class="flex justify-between items-center">
+							<span>Ready by</span>
+							<input type="time" bind:value={readyToDriveTime} class="input w-28 text-sm py-0.5 px-1" />
+						</div>
+						<div class="flex items-center gap-2">
+							{#each ['M','T','W','T','F','S','S'] as day, i}
+								<label class="flex flex-col items-center cursor-pointer">
+									<span class="text-xs mb-0.5">{day}</span>
+									<input type="checkbox" bind:checked={readyToDriveDays[i]} class="w-4 h-4 accent-primary-500" />
+								</label>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
 
-				<!-- Off-Peak Charging -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Charge when cheap rate is available"> Off-Peak Charging </span>
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						on:click={() => (showOffPeakOptions = !showOffPeakOptions)}>
+						<span class="text-xs w-3 text-center">{showOffPeakOptions ? '▼' : '▶'}</span>
+						<span>Off-Peak Charging</span>
+					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={OffPeakCharging} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
+				{#if showOffPeakOptions}
+					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<div class="flex justify-between items-center">
+							<span>Start</span>
+							<input type="time" bind:value={offPeakStart} class="input w-28 text-sm py-0.5 px-1" />
+						</div>
+						<div class="flex justify-between items-center">
+							<span>End</span>
+							<input type="time" bind:value={offPeakEnd} class="input w-28 text-sm py-0.5 px-1" />
+						</div>
+					</div>
+				{/if}
+			</div>
 
-				<!-- Smart Charge -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Charge when additional cheap slots are available"> Smart Charge </span>
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						on:click={() => (showSmartChargeOptions = !showSmartChargeOptions)}>
+						<span class="text-xs w-3 text-center">{showSmartChargeOptions ? '▼' : '▶'}</span>
+						<span>Smart Charge</span>
+					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
+				{#if showSmartChargeOptions}
+					<div class="mt-1 ml-4 text-xs text-surface-400">
+						uses Charge SoC/Amps
+					</div>
+				{/if}
+			</div>
 
-				<!-- Smart Export -->
-				<div class="flex justify-between items-center text-sm">
-					<span title="Export when price is high"> Smart Export </span>
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+						on:click={() => (showSmartExportOptions = !showSmartExportOptions)}>
+						<span class="text-xs w-3 text-center">{showSmartExportOptions ? '▼' : '▶'}</span>
+						<span>Smart Export</span>
+					</button>
 					<label class="relative inline-flex items-center cursor-pointer">
 						<input type="checkbox" bind:checked={smartExport} class="sr-only peer" />
-						<div
-							class="
-							w-9 h-5 bg-surface-300 rounded-full peer
-							peer-checked:bg-primary-500
-							after:content-['']
-							after:absolute after:top-[2px] after:left-[2px]
-							after:bg-white after:rounded-full
-							after:h-4 after:w-4
-							after:transition-all
-							peer-checked:after:translate-x-4
-						"
-						/>
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
 					</label>
 				</div>
-
-
-
-
-
-
-
+				{#if showSmartExportOptions}
+					<div class="mt-2 ml-4 flex justify-between items-center text-surface-600 dark:text-surface-300">
+						<span>Export Limit</span>
+						<div class="flex items-center gap-1">
+							<input type="number" bind:value={smartExportLimit}
+								min="0" max="10000" step="100"
+								class="input w-20 text-right text-sm py-0.5 px-1" />
+							<span class="text-xs">W</span>
+						</div>
+					</div>
+				{/if}
 			</div>
+
 		</div>
+	</div>
 
 	<!-- Charge Card -->
 	<div class="card p-4">
