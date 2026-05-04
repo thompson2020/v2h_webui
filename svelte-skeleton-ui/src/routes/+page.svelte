@@ -79,9 +79,7 @@
 		dc_output_amps?: number;
 		dc_w?: number;
 		dc_bus_volts?: number;
-		ac_volts?: number;
 		ac_amps?: number;
-		ac_w?: number;
 		pre_temp?: number;
 		pre_fan?: number;
 		pre_enabled?: boolean;
@@ -90,6 +88,10 @@
 		// Meter
 		meter_kw?: number;
 		phase_w?: number | null;
+		charger_v?: number | null;
+		charger_a?: number | null;
+		charger_w?: number | null;
+		efficiency?: number | null;
 		// Supervisory
 		smart_charge_request?: boolean;
 		smart_charge_active?: boolean;
@@ -696,8 +698,8 @@
 					<tr style="border-bottom: 2px solid var(--color-surface-400);">
 						<th class="p-2 text-left" rowspan="2">Time</th>
 						<th class="p-2 text-left text-primary-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">CHAdeMO</th>
-						<th class="p-2 text-left text-secondary-500" colspan="12" style="border-left: 1px solid var(--color-surface-400);">Pre-Charger</th>
-						<th class="p-2 text-left text-tertiary-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
+						<th class="p-2 text-left text-secondary-500" colspan="10" style="border-left: 1px solid var(--color-surface-400);">Pre-Charger</th>
+						<th class="p-2 text-left text-tertiary-500" colspan="6" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
 						<th class="p-2 text-left text-success-500" colspan="4" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
 					</tr>
 					<tr style="border-bottom: 1px solid var(--color-surface-300);">
@@ -711,13 +713,15 @@
 						<th class="p-2 text-left text-xs">DC Out A</th>
 						<th class="p-2 text-left text-xs">DC W</th>
 						<th class="p-2 text-left text-xs">DC Bus V</th>
-						<th class="p-2 text-left text-xs">AC V</th>
 						<th class="p-2 text-left text-xs">AC A</th>
-						<th class="p-2 text-left text-xs">AC W</th>
 						<th class="p-2 text-left text-xs">Temp</th>
 						<th class="p-2 text-left text-xs">Fan</th>
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Total W</th>
 						<th class="p-2 text-left text-xs">Phase W</th>
+						<th class="p-2 text-left text-xs">Chgr V</th>
+						<th class="p-2 text-left text-xs">Chgr A</th>
+						<th class="p-2 text-left text-xs">Chgr W</th>
+						<th class="p-2 text-left text-xs">Eff %</th>
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SE Req</th>
 						<th class="p-2 text-left text-xs">SEES Req</th>
 						<th class="p-2 text-left text-xs">SC Req</th>
@@ -738,13 +742,15 @@
 							<td class="p-2">{(rtd.dc_output_amps ?? 0).toFixed(1)}A</td>
 							<td class="p-2">{Math.round(rtd.dc_w ?? 0)}W</td>
 							<td class="p-2">{(rtd.dc_bus_volts ?? 0).toFixed(1)}V</td>
-							<td class="p-2">{(rtd.ac_volts ?? 0).toFixed(1)}V</td>
 							<td class="p-2">{(rtd.ac_amps ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{Math.round(rtd.ac_w ?? 0)}W</td>
 							<td class="p-2">{(rtd.pre_temp ?? 0).toFixed(1)}ºC</td>
 							<td class="p-2">{Math.round(rtd.pre_fan ?? 0)}%</td>
 							<td class="p-2">{Math.round(rtd.meter_kw ?? 0)}</td>
 							<td class="p-2">{rtd.phase_w != null ? Math.round(rtd.phase_w) + 'W' : '—'}</td>
+							<td class="p-2">{rtd.charger_v != null ? rtd.charger_v.toFixed(1) + 'V' : '—'}</td>
+							<td class="p-2">{rtd.charger_a != null ? rtd.charger_a.toFixed(3) + 'A' : '—'}</td>
+							<td class="p-2">{rtd.charger_w != null ? Math.round(rtd.charger_w) + 'W' : '—'}</td>
+							<td class="p-2">{rtd.efficiency != null ? rtd.efficiency.toFixed(1) + '%' : '—'}</td>
 							<td class="p-2">{rtd.smart_export_request ? '✓' : '—'}</td>
 							<td class="p-2">{rtd.smart_export_excess_solar_request ? '✓' : '—'}</td>
 							<td class="p-2">{rtd.smart_charge_request ? '✓' : '—'}</td>
