@@ -49,16 +49,19 @@
 		self_use:             boolean;
 		export_excess_solar:  boolean;
 		ev_drain_protection:  boolean;
-		ready_to_drive:       boolean;
-		ready_to_drive_time:  string;
-		ready_to_drive_days:  boolean[];
+		ready_to_drive:            boolean;
+		ready_to_drive_end_time:   string;
+		ready_to_drive_start_time: string;
+		ready_to_drive_soc:        number;
+		ready_to_drive_days:       boolean[];
 		off_peak_charging:    boolean;
 		off_peak_start:       string;
 		off_peak_end:         string;
 		smart_charge:         boolean;
-		smart_export:         boolean;
-		smart_export_limit_w: number;
-		charge_soc_limit:     number;
+		smart_export:                boolean;
+		smart_export_limit_w:        number;
+		smart_export_excess_solar:   boolean;
+		charge_soc_limit:            number;
 		charge_amps:          number;
 		charge_eco:           boolean;
 	}
@@ -94,6 +97,8 @@
 		ev_drain_protection_active?: boolean;
 		smart_export_request?: boolean;
 		smart_export_active?: boolean;
+		smart_export_excess_solar_request?: boolean;
+		smart_export_excess_solar_active?: boolean;
 		ready_to_drive_active?: boolean;
 		off_peak_charging_active?: boolean;
 		settings?: OperatorSettings;
@@ -110,13 +115,17 @@
 	let evDrainProtection = false;
 
 	let readyToDrive = false;
+	let readyToDriveSoc = 90;
+	let readyToDriveEndTime = '08:00';
+	let readyToDriveStartTime = '--:--';
 	let OffPeakCharging = true;
 	let smartCharge = true;
 	let smartExport = false;
 	let smartExportLimit = 2500;
 	let showSmartExportOptions = false;
+	let smartExportExcessSolar = false;
+	let showSmartExportExcessSolarOptions = false;
 	let showReadyToDriveOptions = false;
-	let readyToDriveTime = '08:00';
 	let readyToDriveDays = [false, false, false, false, false, false, false]; // M T W T F S S
 	let showOffPeakOptions = false;
 	let showSmartChargeOptions = false;
@@ -135,12 +144,15 @@
 	let snapshotMode = '';
 	let snapshotSoc = 0;
 	let snapshotDcKw = 0;
+	let snapshotMeterW = 0;
 	let snapshotSmartChargeRequest = false;
 	let snapshotSmartChargeActive = false;
 	let snapshotEvDrainProtectionRequest = false;
 	let snapshotEvDrainProtectionActive = false;
 	let snapshotSmartExportRequest = false;
 	let snapshotSmartExportActive = false;
+	let snapshotSmartExportExcessSolarRequest = false;
+	let snapshotSmartExportExcessSolarActive = false;
 	let snapshotReadyToDriveRequest = false;
 	let snapshotReadyToDriveActive = false;
 	let snapshotOffPeakChargingRequest = false;
@@ -152,6 +164,25 @@
 	}
 
 	$: operationalMode.set(snapshotMode);
+
+	const DC_BAR_MAX_W = 5600; // 14A * 400V
+	$: dcBarPct   = Math.min(Math.abs(snapshotDcKw) / DC_BAR_MAX_W * 50, 50);
+	$: dcBarStyle = snapshotDcKw >= 0
+		? `bottom: 50%; height: ${dcBarPct}%`
+		: `top: 50%; height: ${dcBarPct}%`;
+	$: dcBarColor = snapshotDcKw > 50 ? 'bg-emerald-500' : snapshotDcKw < -50 ? 'bg-blue-400' : 'bg-surface-400';
+
+	$: gridBarPct   = Math.min(Math.abs(snapshotMeterW) / DC_BAR_MAX_W * 50, 50);
+	$: gridBarStyle = snapshotMeterW >= 0
+		? `bottom: 50%; height: ${gridBarPct}%`
+		: `top: 50%; height: ${gridBarPct}%`;
+	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
+
+	$: modePillClass =
+		snapshotMode === 'V2h'    ? 'border-2 border-blue-500 text-blue-500' :
+		snapshotMode === 'Charge' ? 'border-2 border-emerald-500 text-emerald-500' :
+		snapshotMode === 'Idle'   ? 'bg-black text-white border-2 border-white' :
+		'border-2 border-surface-400 text-surface-400';
 
 	let eventData = writable<EventData[]>([]);
 	let realTimeData = writable<RealTimeData[]>([]);
@@ -176,16 +207,19 @@
 					self_use:             selfUse,
 					export_excess_solar:  exportExcessSolar,
 					ev_drain_protection:  evDrainProtection,
-					ready_to_drive:       readyToDrive,
-					ready_to_drive_time:  readyToDriveTime,
-					ready_to_drive_days:  readyToDriveDays,
+					ready_to_drive:            readyToDrive,
+					ready_to_drive_end_time:   readyToDriveEndTime,
+					ready_to_drive_start_time: readyToDriveStartTime,
+					ready_to_drive_soc:        readyToDriveSoc,
+					ready_to_drive_days:       readyToDriveDays,
 					off_peak_charging:    OffPeakCharging,
 					off_peak_start:       offPeakStart,
 					off_peak_end:         offPeakEnd,
 					smart_charge:         smartCharge,
-					smart_export:         smartExport,
-					smart_export_limit_w: smartExportLimit,
-					charge_soc_limit:     soc_range_value,
+					smart_export:                smartExport,
+					smart_export_limit_w:        smartExportLimit,
+					smart_export_excess_solar:   smartExportExcessSolar,
+					charge_soc_limit:            soc_range_value,
 					charge_amps:          amps_value,
 					charge_eco:           chargeEco,
 				}
@@ -200,16 +234,19 @@
 		selfUse            = s.self_use;
 		exportExcessSolar  = s.export_excess_solar;
 		evDrainProtection  = s.ev_drain_protection;
-		readyToDrive       = s.ready_to_drive;
-		readyToDriveTime   = s.ready_to_drive_time;
-		readyToDriveDays   = s.ready_to_drive_days;
+		readyToDrive          = s.ready_to_drive;
+		readyToDriveEndTime   = s.ready_to_drive_end_time;
+		readyToDriveStartTime = s.ready_to_drive_start_time;
+		readyToDriveSoc       = s.ready_to_drive_soc;
+		readyToDriveDays      = s.ready_to_drive_days;
 		OffPeakCharging    = s.off_peak_charging;
 		offPeakStart       = s.off_peak_start;
 		offPeakEnd         = s.off_peak_end;
 		smartCharge        = s.smart_charge;
-		smartExport        = s.smart_export;
-		smartExportLimit   = s.smart_export_limit_w;
-		soc_range_value    = s.charge_soc_limit;
+		smartExport             = s.smart_export;
+		smartExportLimit        = s.smart_export_limit_w;
+		smartExportExcessSolar  = s.smart_export_excess_solar;
+		soc_range_value         = s.charge_soc_limit;
 		amps_value         = s.charge_amps;
 		chargeEco          = s.charge_eco;
 	}
@@ -261,12 +298,15 @@
 					: (rawState ?? '');
 				snapshotSoc = message.Data.soc ?? 0;
 				snapshotDcKw = message.Data.dc_w ?? 0;
+				snapshotMeterW = message.Data.meter_kw ?? 0;
 				snapshotSmartChargeRequest = message.Data.smart_charge_request ?? false;
 				snapshotSmartChargeActive = message.Data.smart_charge_active ?? false;
 				snapshotEvDrainProtectionRequest = message.Data.ev_drain_protection_request ?? false;
 				snapshotEvDrainProtectionActive = message.Data.ev_drain_protection_active ?? false;
 				snapshotSmartExportRequest = message.Data.smart_export_request ?? false;
 				snapshotSmartExportActive = message.Data.smart_export_active ?? false;
+				snapshotSmartExportExcessSolarRequest = message.Data.smart_export_excess_solar_request ?? false;
+				snapshotSmartExportExcessSolarActive = message.Data.smart_export_excess_solar_active ?? false;
 				snapshotReadyToDriveRequest = message.Data.ready_to_drive_request ?? false;
 				snapshotReadyToDriveActive = message.Data.ready_to_drive_active ?? false;
 				snapshotOffPeakChargingRequest = message.Data.off_peak_charging_request ?? false;
@@ -311,7 +351,6 @@
 
 	<!-- EV Power Card -->
 	<div class="card p-4">
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">EV Power</div>
 		<button
 			class="btn variant-filled {snapshotMode === 'Idle' ? 'variant-filled-primary' : ''}"
 			on:click={() => sendModeChange('Idle')}
@@ -322,10 +361,6 @@
 
 	<!--Smart Self-Powered Card-->
 	<div class="card p-4">
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">
-			Smart Self-Powered
-		</div>
-
 		<button
 			class="btn variant-filled {snapshotMode === 'V2h' ? 'variant-filled-primary' : ''}"
 			on:click={() => sendModeChange('V2h')}
@@ -337,7 +372,7 @@
 			<div class="mt-2">
 				<RangeSlider name="soc-min" bind:value={v2h_soc_min} on:change={sendSettings} min={0} max={100} step={5} ticked>
 					<div class="flex justify-between items-center">
-						<div class="font-bold">SoC Min</div>
+						<div class="text-xs">SoC Min</div>
 						<div class="text-xs">{v2h_soc_min}%</div>
 					</div>
 				</RangeSlider>
@@ -346,7 +381,7 @@
 			<div class="mt-2">
 				<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
 					<div class="flex justify-between items-center">
-						<div class="font-bold">SoC Max</div>
+						<div class="text-xs">SoC Max</div>
 						<div class="text-xs">{v2h_soc_max}%</div>
 					</div>
 				</RangeSlider>
@@ -367,7 +402,10 @@
 		<div class="mt-4 flex flex-col gap-3">
 
 			<div class="flex justify-between items-center text-sm">
-				<span title="Discharge battery to offset house use"> Self-Use </span>
+				<span class="flex items-center gap-1" title="Discharge battery to offset house use">
+					Self-Use
+					<span class={ledClass(false, snapshotDcKw < -50)}></span>
+				</span>
 				<label class="relative inline-flex items-center cursor-pointer">
 					<input type="checkbox" bind:checked={selfUse} class="sr-only peer" on:change={sendSettings} />
 					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
@@ -375,7 +413,10 @@
 			</div>
 
 			<div class="flex justify-between items-center text-sm">
-				<span title="Allow excess solar to be exported"> Export Excess Solar </span>
+				<span class="flex items-center gap-1" title="Allow excess solar to be exported">
+					Export Excess Solar
+					<span class={ledClass(false, snapshotMeterW < -50)}></span>
+				</span>
 				<label class="relative inline-flex items-center cursor-pointer">
 					<input type="checkbox" bind:checked={exportExcessSolar} class="sr-only peer" on:change={sendSettings} />
 					<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
@@ -403,9 +444,21 @@
 				</div>
 				{#if showReadyToDriveOptions}
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<div class="mt-1">
+							<RangeSlider name="rtd-soc" bind:value={readyToDriveSoc} on:change={sendSettings} min={10} max={100} step={5} ticked>
+								<div class="flex justify-between items-center">
+									<div class="text-xs">Target SoC</div>
+									<div class="text-xs">{readyToDriveSoc}%</div>
+								</div>
+							</RangeSlider>
+						</div>
+						<div class="flex justify-between items-center">
+							<span>Start charge</span>
+							<input type="time" value={readyToDriveStartTime} disabled class="input w-28 text-sm py-0.5 px-1 opacity-50 cursor-not-allowed" />
+						</div>
 						<div class="flex justify-between items-center">
 							<span>Ready by</span>
-							<input type="time" bind:value={readyToDriveTime} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" />
+							<input type="time" bind:value={readyToDriveEndTime} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" />
 						</div>
 						<div class="flex items-center gap-2">
 							{#each ['M','T','W','T','F','S','S'] as day, i}
@@ -456,27 +509,6 @@
 				<div class="flex items-center justify-between">
 					<button type="button"
 						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
-						on:click={() => (showSmartChargeOptions = !showSmartChargeOptions)}>
-						<span class="text-xs w-3 text-center">{showSmartChargeOptions ? '▼' : '▶'}</span>
-						<span>Smart Charge</span>
-						<span class={ledClass(snapshotSmartChargeRequest, snapshotSmartChargeActive)}></span>
-					</button>
-					<label class="relative inline-flex items-center cursor-pointer">
-						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" on:change={sendSettings} />
-						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
-					</label>
-				</div>
-				{#if showSmartChargeOptions}
-					<div class="mt-1 ml-4 text-xs text-surface-400">
-						uses Charge SoC/Amps
-					</div>
-				{/if}
-			</div>
-
-			<div class="text-sm">
-				<div class="flex items-center justify-between">
-					<button type="button"
-						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
 						on:click={() => (showSmartExportOptions = !showSmartExportOptions)}>
 						<span class="text-xs w-3 text-center">{showSmartExportOptions ? '▼' : '▶'}</span>
 						<span>Smart Export</span>
@@ -488,6 +520,7 @@
 					</label>
 				</div>
 				{#if showSmartExportOptions}
+					<div class="mt-1 ml-4 text-xs text-surface-400">Export when prices are high</div>
 					<div class="mt-2 ml-4 flex justify-between items-center text-surface-600 dark:text-surface-300">
 						<span>Export Limit</span>
 						<div class="flex items-center gap-1">
@@ -497,6 +530,47 @@
 							<span class="text-xs">W</span>
 						</div>
 					</div>
+				{/if}
+			</div>
+
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
+						on:click={() => (showSmartExportExcessSolarOptions = !showSmartExportExcessSolarOptions)}>
+						<span class="text-xs w-3 text-center">{showSmartExportExcessSolarOptions ? '▼' : '▶'}</span>
+						<span>Smart Export Excess Solar</span>
+						<span class={ledClass(snapshotSmartExportExcessSolarRequest, snapshotSmartExportExcessSolarActive)}></span>
+					</button>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={smartExportExcessSolar} class="sr-only peer" on:change={sendSettings} />
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+					</label>
+				</div>
+				{#if showSmartExportExcessSolarOptions}
+					<div class="mt-1 ml-4 text-xs text-surface-400">
+						Exports when solar export rate &gt; overnight import rate
+					</div>
+				{/if}
+			</div>
+
+			<div class="text-sm">
+				<div class="flex items-center justify-between">
+					<button type="button"
+						class="flex items-center gap-1 hover:text-primary-500 transition-colors mr-2"
+						on:click={() => (showSmartChargeOptions = !showSmartChargeOptions)}>
+						<span class="text-xs w-3 text-center">{showSmartChargeOptions ? '▼' : '▶'}</span>
+						<span>Smart Charge</span>
+						<span class={ledClass(snapshotSmartChargeRequest, snapshotSmartChargeActive)}></span>
+					</button>
+					<label class="relative inline-flex items-center cursor-pointer">
+						<input type="checkbox" bind:checked={smartCharge} class="sr-only peer" on:change={sendSettings} />
+						<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+					</label>
+				</div>
+				{#if showSmartChargeOptions}
+					<div class="mt-1 ml-4 text-xs text-surface-400">Charge during cheap import slots</div>
+					<div class="mt-0.5 ml-4 text-xs text-surface-400">uses Charge SoC/Amps</div>
 				{/if}
 			</div>
 
@@ -526,8 +600,6 @@
 
 	<!-- Charge Card -->
 	<div class="card p-4">
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-3">Charge</div>
-
 		<button
 			class="btn variant-filled flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'variant-filled-primary' : ''}"
 			on:click={submitCharge}>
@@ -545,7 +617,7 @@
 			ticked
 		>
 			<div class="flex justify-between items-center">
-				<div class="font-bold">SoC</div>
+				<div class="text-xs">SoC</div>
 				<div class="text-xs">{soc_range_value} / 100</div>
 			</div>
 		</RangeSlider>
@@ -560,7 +632,7 @@
 			ticked
 		>
 			<div class="flex justify-between items-center">
-				<div class="font-bold">Amps</div>
+				<div class="text-xs">Amps</div>
 				<div class="text-xs">{amps_value} / 16</div>
 			</div>
 		</RangeSlider>
@@ -576,12 +648,25 @@
 
 	<!-- Operational Mode Card -->
 	<div class="card p-4 text-center">
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Status</div>
-		<div class="text-2xl font-bold mb-4">{snapshotMode || '—'}</div>
+		<div class="text-2xl font-bold mb-4 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
 		<div class="text-2xl font-bold mb-4">{snapshotSoc.toFixed(1)}%</div>
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">{snapshotMode === 'V2h' ? 'Discharging' : snapshotMode === 'Charge' ? 'Charging' : 'Power'}</div>
-		<div class="text-2xl font-bold">{Math.round(snapshotDcKw)} W</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">{snapshotDcKw > 50 ? 'Charging' : snapshotDcKw < -50 ? 'Discharging' : 'Power'}</div>
+		<div class="flex flex-col items-center mb-2">
+			<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
+				<div class="absolute left-0 w-full rounded-full {dcBarColor}" style="{dcBarStyle}"></div>
+				<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+			</div>
+		</div>
+		<div class="text-2xl font-bold">{Math.abs(Math.round(snapshotDcKw))} W</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1 mt-3">{snapshotMeterW > 50 ? 'Grid Import' : snapshotMeterW < -50 ? 'Grid Export' : 'Grid'}</div>
+		<div class="flex flex-col items-center mb-2">
+			<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
+				<div class="absolute left-0 w-full rounded-full {gridBarColor}" style="{gridBarStyle}"></div>
+				<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+			</div>
+		</div>
+		<div class="text-2xl font-bold">{Math.abs(Math.round(snapshotMeterW))} W</div>
 	</div>
 
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
@@ -624,7 +709,7 @@
 						<th class="p-2 text-left text-primary-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">CHAdeMO</th>
 						<th class="p-2 text-left text-secondary-500" colspan="12" style="border-left: 1px solid var(--color-surface-400);">Pre-Charger</th>
 						<th class="p-2 text-left text-tertiary-500" colspan="2" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
-						<th class="p-2 text-left text-success-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
+						<th class="p-2 text-left text-success-500" colspan="4" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
 					</tr>
 					<tr style="border-bottom: 1px solid var(--color-surface-300);">
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SoC</th>
@@ -644,8 +729,9 @@
 						<th class="p-2 text-left text-xs">Fan</th>
 						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Total W</th>
 						<th class="p-2 text-left text-xs">Phase W</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SC Req</th>
-						<th class="p-2 text-left text-xs">SE Req</th>
+						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SE Req</th>
+						<th class="p-2 text-left text-xs">SEES Req</th>
+						<th class="p-2 text-left text-xs">SC Req</th>
 						<th class="p-2 text-left text-xs">EDP Req</th>
 					</tr>
 				</thead>
@@ -670,8 +756,9 @@
 							<td class="p-2">{Math.round(rtd.pre_fan ?? 0)}%</td>
 							<td class="p-2">{Math.round(rtd.meter_kw ?? 0)}</td>
 							<td class="p-2">{rtd.phase_w != null ? Math.round(rtd.phase_w) + 'W' : '—'}</td>
-							<td class="p-2">{rtd.smart_charge_request ? '✓' : '—'}</td>
 							<td class="p-2">{rtd.smart_export_request ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.smart_export_excess_solar_request ? '✓' : '—'}</td>
+							<td class="p-2">{rtd.smart_charge_request ? '✓' : '—'}</td>
 							<td class="p-2">{rtd.ev_drain_protection_request ? '✓' : '—'}</td>
 						</tr>
 					{/each}
