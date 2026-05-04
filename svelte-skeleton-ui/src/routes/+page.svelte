@@ -179,9 +179,9 @@
 	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
 
 	$: modePillClass =
-		snapshotMode === 'V2h'    ? 'border-2 border-blue-500 text-blue-500' :
-		snapshotMode === 'Charge' ? 'border-2 border-emerald-500 text-emerald-500' :
-		snapshotMode === 'Idle'   ? 'bg-black text-white border-2 border-white' :
+		snapshotMode === 'V2h'    ? 'bg-blue-600 text-white' :
+		snapshotMode === 'Charge' ? 'bg-emerald-600 text-white' :
+		snapshotMode === 'Idle'   ? 'bg-white text-black border-2 border-black' :
 		'border-2 border-surface-400 text-surface-400';
 
 	let eventData = writable<EventData[]>([]);
@@ -253,9 +253,7 @@
 
 	function submitCharge(event: Event) {
 		event.preventDefault();
-		socket.send(JSON.stringify({
-			cmd: { SetMode: { Charge: { amps: amps_value, eco: chargeEco, soc_limit: soc_range_value } } }
-		}));
+		socket.send(JSON.stringify({ cmd: { SetMode: 'Charge' } }));
 	}
 
 	function sendModeChange(mode: string) {
@@ -352,7 +350,7 @@
 	<!-- EV Power Card -->
 	<div class="card p-4">
 		<button
-			class="btn variant-filled {snapshotMode === 'Idle' ? 'variant-filled-primary' : ''}"
+			class="btn {snapshotMode === 'Idle' ? 'bg-white text-black border-2 border-black' : 'variant-filled'}"
 			on:click={() => sendModeChange('Idle')}
 		>
 			Idle
@@ -362,7 +360,7 @@
 	<!--Smart Self-Powered Card-->
 	<div class="card p-4">
 		<button
-			class="btn variant-filled {snapshotMode === 'V2h' ? 'variant-filled-primary' : ''}"
+			class="btn {snapshotMode === 'V2h' ? 'bg-blue-600 text-white' : 'variant-filled'}"
 			on:click={() => sendModeChange('V2h')}
 		>
 			V2H
@@ -390,7 +388,7 @@
 
 		<!-- Max Amps -->
 		<div class="mt-2">
-			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} on:change={sendSettings} min={1} max={16} step={1} ticked>
+			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} on:change={sendSettings} min={0} max={16} step={1} ticked>
 				<div class="flex justify-between items-center">
 					<div class="text-xs">Max Amps</div>
 					<div class="text-xs">{v2hMaxAmps}A</div>
@@ -601,7 +599,7 @@
 	<!-- Charge Card -->
 	<div class="card p-4">
 		<button
-			class="btn variant-filled flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'variant-filled-primary' : ''}"
+			class="btn flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'bg-emerald-600 text-white' : 'variant-filled'}"
 			on:click={submitCharge}>
 			Charge
 		</button>
