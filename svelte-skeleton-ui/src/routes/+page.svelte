@@ -267,19 +267,16 @@
 		socket.send(JSON.stringify(payload));
 	}
 	if (typeof WebSocket !== 'undefined') {
-		// Make this a singleton?
 		socket = new WebSocket('ws://192.168.10.101:5555');
-		socket.addEventListener('open', () => {
-			console.log('Opened');
-			const message = JSON.stringify({ cmd: 'GetData' });
 
-			// Send the message
-			socket.send(message);
+		socket.addEventListener('open', () => {
+			console.log('WebSocket opened');
+			// Server pushes Data automatically every 1s; request Events once on connect.
+			socket.send(JSON.stringify({ cmd: 'GetEvents' }));
 		});
 
 		socket.addEventListener('message', (event: MessageEvent) => {
 			const message = JSON.parse(event.data);
-			console.log(JSON.stringify(message));
 			if (message.Events) {
 				eventData.set(message.Events);
 			}
@@ -313,35 +310,6 @@
 			}
 		});
 	}
-
-	onMount(() => {
-		console.log('on mount');
-		if (socket) {
-			async function fetchData() {
-				try {
-					let message = JSON.stringify({ cmd: 'GetData' });
-					console.log('periodic: ' + message);
-					// Send the message
-					socket.send(message);
-
-					message = JSON.stringify({ cmd: 'GetEvents' });
-					console.log('periodic: ' + message);
-					// Send the message
-					socket.send(message);
-				} catch (error) {
-					console.error('WebSocket send error:', error);
-				}
-			}
-
-			const interval = setInterval(fetchData, 3000);
-			fetchData(); // Fetch data immediately when the component mounts
-
-			return () => {
-				console.log('onMount returned');
-				clearInterval(interval);
-			};
-		}
-	});
 </script>
 
 <br />
