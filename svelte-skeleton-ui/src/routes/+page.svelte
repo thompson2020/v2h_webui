@@ -105,6 +105,8 @@
 	}
 
 	let socket: WebSocket;
+	let wsConnected = false;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	let time = '';
 
 	//Auto/Load Balancing + Time Based + Event Based(Charge)e.g Additional Slots + Event Based Discharge (High export price)
@@ -266,12 +268,15 @@
 		}
 		socket.send(JSON.stringify(payload));
 	}
-	if (typeof WebSocket !== 'undefined') {
+	function connect() {
+		if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+		if (typeof WebSocket === 'undefined') return;
+
 		socket = new WebSocket('ws://192.168.10.101:5555');
 
 		socket.addEventListener('open', () => {
 			console.log('WebSocket opened');
-			// Server pushes Data automatically every 1s; request Events once on connect.
+			wsConnected = true;
 			socket.send(JSON.stringify({ cmd: 'GetEvents' }));
 		});
 
@@ -309,11 +314,29 @@
 				if (message.Data.settings) applySettings(message.Data.settings);
 			}
 		});
+
+		socket.addEventListener('close', () => {
+			wsConnected = false;
+			reconnectTimer = setTimeout(connect, 5000);
+		});
+
+		socket.addEventListener('error', () => {
+			// close fires after error, which schedules the reconnect
+			wsConnected = false;
+		});
 	}
+
+	connect();
 </script>
 
+{#if !wsConnected}
+<div class="fixed top-0 left-0 right-0 z-50 bg-error-500 text-white text-center py-3 px-4 font-semibold shadow-lg">
+	E-Stop active or charger offline — twist E-Stop to release &nbsp;·&nbsp; <span class="font-normal opacity-80">Reconnecting…</span>
+</div>
+{/if}
+
 <br />
-<div class="container mx-auto px-4 flex flex-wrap gap-2">
+<div class="container mx-auto px-4 flex flex-wrap gap-2" class:mt-12={!wsConnected}>
 
 	<!-- EV Power Card -->
 	<div class="card p-4">
