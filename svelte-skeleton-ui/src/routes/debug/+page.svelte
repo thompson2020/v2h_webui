@@ -1,364 +1,218 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { writable } from 'svelte/store';
+	import { afterUpdate } from 'svelte';
 
-	interface X100 {
-		minimum_charge_current: number;
-		minimum_battery_voltage: number;
-		maximum_battery_voltage: number;
-		constant_of_charging_rate_indication: number;
+	interface LogEntry {
+		ts: string;
+		level: string;
+		target: string;
+		message: string;
 	}
 
-	interface X101 {
-		max_charging_time_10s_bit: number;
-		max_charging_time_1min_bit: number;
-		estimated_charging_time: number;
-		rated_battery_capacity: number;
+	// --- filter state ---
+	let showError = true;
+	let showWarn  = true;
+	let showInfo  = true;
+	let showDebug = true;
+	let grepInclude = '';   // show only lines matching any term (comma-sep)
+	let grepExclude = '';   // hide lines matching any term (comma-sep)
+	let autoScroll = true;
+
+	// --- data ---
+	let entries: LogEntry[] = [];
+	let pending: LogEntry[] = [];
+	let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Batch incoming entries into the display array at most every 200 ms
+	// so rapid debug bursts don't stall the UI.
+	function scheduleFlush() {
+		if (flushTimer) return;
+		flushTimer = setTimeout(() => {
+			flushTimer = null;
+			if (pending.length === 0) return;
+			entries = [...entries, ...pending].slice(-3000);
+			pending = [];
+		}, 200);
 	}
 
-	interface X102Faults {
-		fault_battery_voltage_deviation: boolean;
-		fault_high_battery_temperature: boolean;
-		fault_battery_current_deviation: boolean;
-		fault_battery_undervoltage: boolean;
-		fault_battery_overvoltage: boolean;
+	// --- derived / filtered ---
+	const LEVELS = ['ERROR','WARN','INFO','DEBUG','TRACE'] as const;
+
+	function levelVisible(level: string): boolean {
+		if (level === 'ERROR') return showError;
+		if (level === 'WARN')  return showWarn;
+		if (level === 'INFO')  return showInfo;
+		return showDebug;  // DEBUG / TRACE
 	}
 
-	interface X102Status {
-		status_discharge_compatible: boolean;
-		status_normal_stop_request: boolean;
-		status_vehicle: boolean;
-		status_charging_system: boolean;
-		status_vehicle_shifter_position: boolean;
-		status_vehicle_charging: boolean;
+	function terms(raw: string): string[] {
+		return raw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
 	}
 
-	interface X102 {
-		control_protocol_number_ev: number;
-		target_battery_voltage: number;
-		charging_current_request: number;
-		faults: X102Faults;
-		status: X102Status;
-		state_of_charge: number;
-	}
+	$: includeTerms = terms(grepInclude);
+	$: excludeTerms = terms(grepExclude);
 
-	interface X108 {
-		available_output_current: number;
-		avaible_output_voltage: number;
-		welding_detection: number;
-		threshold_voltage: number;
-	}
-
-	interface X109Status {
-		status_charger_stop_control: boolean;
-		fault_charging_system_malfunction: boolean;
-		fault_battery_incompatibility: boolean;
-		status_vehicle_connector_lock: boolean;
-		fault_station_malfunction: boolean;
-		status_station: boolean;
-	}
-
-	interface X109 {
-		status: X109Status;
-		control_protocol_number_qc: number;
-		output_voltage: number;
-		output_current: number;
-		discharge_compatitiblity: boolean;
-		remaining_charging_time_10s_bit: number;
-		remaining_charging_time_1min_bit: number;
-	}
-
-	interface X200 {
-		maximum_discharge_current: number;
-		minimum_discharge_voltage: number;
-		minimum_battery_discharge_level: number;
-		max_remaining_capacity_for_charging: number;
-	}
-
-	interface X208 {
-		discharge_current: number;
-		input_voltage: number;
-		input_current: number;
-		lower_threshold_voltage: number;
-	}
-
-	interface X209 {
-		sequence: number;
-		remaing_discharge_time: number;
-	}
-
-	// interface ChargeParameters {
-	// 	amps: number | null;
-	// 	eco: boolean | null;
-	// 	soc_limit: number | null;
-	// }
-
-	// interface Charge {
-	// 	ChargeParameters?;
-	// }
-
-	interface WebSocketData {
-		// pins?: Pins;
-		x100: X100;
-		x101: X101;
-		x102: X102;
-		x108: X108;
-		x109: X109;
-		x200: X200;
-		x208: X208;
-		x209: X209;
-		state: any;
-		amps: number;
-	}
-
-	// {"Debug":{"x100":{"minimum_charge_current":0,"minimum_battery_voltage":0,"maximum_battery_voltage":0,"constant_of_charging_rate_indication":0},"x101":{"max_charging_time_10s_bit":0,"max_charging_time_1min_bit":0,"estimated_charging_time":0,"rated_battery_capacity":0},"x102":{"control_protocol_number_ev":0,"target_battery_voltage":0,"charging_current_request":0,"faults":{"fault_battery_voltage_deviation":false,"fault_high_battery_temperature":false,"fault_battery_current_deviation":false,"fault_battery_undervoltage":false,"fault_battery_overvoltage":false},"status":{"status_discharge_compatible":false,"status_normal_stop_request":false,"status_vehicle":false,"status_charging_system":false,"status_vehicle_shifter_position":false,"status_vehicle_charging":false},"state_of_charge":0},"x108":{"available_output_current":16,"avaible_output_voltage":500,"welding_detection":1,"threshold_voltage":435},"x109":{"status":{"status_charger_stop_control":true,"fault_charging_system_malfunction":false,"fault_battery_incompatibility":false,"status_vehicle_connector_lock":false,"fault_station_malfunction":false,"status_station":false},"control_protocol_number_qc":2,"output_voltage":0,"output_current":0,"discharge_compatitiblity":true,"remaining_charging_time_10s_bit":255,"remaining_charging_time_1min_bit":255},"x200":{"maximum_discharge_current":0,"minimum_discharge_voltage":0,"minimum_battery_discharge_level":0,"max_remaining_capacity_for_charging":0},"x208":{"discharge_current":0,"input_voltage":500,"input_current":16,"lower_threshold_voltage":250},"x209":{"sequence":2,"remaing_discharge_time":0},"state":"Uninitalised","amps":0}} (+page.svelte, line 1649)
-
-	let socket: WebSocket;
-	let payloads = writable<WebSocketData[]>([]);
-	if (typeof WebSocket !== 'undefined') {
-		// Make this a singleton?
-		socket = new WebSocket('ws://10.0.1.177:5555');
-		socket.addEventListener('open', () => {
-			console.log('Opened');
-			const message = JSON.stringify({ cmd: 'GetDebug' });
-
-			// Send the message
-			socket.send(message);
-		});
-
-		socket.addEventListener('message', (event: MessageEvent) => {
-			const message = JSON.parse(event.data);
-			console.log(JSON.stringify(message));
-			if (message.Debug) {
-				payloads.set([message.Debug]);
-			}
-		});
-	}
-	onMount(() => {
-		console.log('on mount');
-		if (socket) {
-			async function fetchData() {
-				try {
-					let message = JSON.stringify({ cmd: 'GetDebug' });
-					console.log('periodic: ' + message);
-					// Send the message
-					socket.send(message);
-				} catch (error) {
-					console.error('WebSocket send error:', error);
-				}
-			}
-
-			const interval = setInterval(fetchData, 3000);
-			fetchData(); // Fetch data immediately when the component mounts
-
-			return () => {
-				console.log('onMount returned');
-				clearInterval(interval);
-			};
-		}
+	$: filtered = entries.filter(e => {
+		if (!levelVisible(e.level)) return false;
+		const haystack = (e.target + ' ' + e.message).toLowerCase();
+		if (includeTerms.length > 0 && !includeTerms.some(t => haystack.includes(t))) return false;
+		if (excludeTerms.length > 0 &&  excludeTerms.some(t => haystack.includes(t))) return false;
+		return true;
 	});
+
+	// --- auto-scroll ---
+	let logEl: HTMLElement;
+	afterUpdate(() => {
+		if (autoScroll && logEl) logEl.scrollTop = logEl.scrollHeight;
+	});
+
+	// --- split message at first ' | ' ---
+	function splitMsg(msg: string): [string, string] {
+		const idx = msg.indexOf(' | ');
+		if (idx === -1) return [msg, ''];
+		return [msg.slice(0, idx), msg.slice(idx + 3)];
+	}
+
+	// --- module shortening: strip crate prefix ---
+	function shortTarget(t: string): string {
+		return t.replace(/^indra_beaglebone::/, '');
+	}
+
+	// --- level styling ---
+	function levelClass(level: string): string {
+		switch (level) {
+			case 'ERROR': return 'text-red-400 font-bold';
+			case 'WARN':  return 'text-amber-400';
+			case 'INFO':  return 'text-sky-300';
+			default:      return 'text-surface-400';
+		}
+	}
+	function rowClass(level: string): string {
+		if (level === 'ERROR') return 'bg-red-950/30';
+		if (level === 'WARN')  return 'bg-amber-950/20';
+		return '';
+	}
+
+	// --- WebSocket ---
+	let wsConnected = false;
+	let liveLog = false;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let socket: WebSocket;
+
+	function sendLogControl(enable: boolean) {
+		if (socket && socket.readyState === WebSocket.OPEN) {
+			socket.send(JSON.stringify({ cmd: enable ? 'StartLogs' : 'StopLogs' }));
+		}
+	}
+
+	function connect() {
+		if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+		if (typeof WebSocket === 'undefined') return;
+		socket = new WebSocket('ws://192.168.10.101:5555');
+		socket.addEventListener('open', () => {
+			wsConnected = true;
+			if (liveLog) sendLogControl(true); // re-subscribe after reconnect
+		});
+		socket.addEventListener('close',   () => { wsConnected = false; reconnectTimer = setTimeout(connect, 5000); });
+		socket.addEventListener('error',   () => { wsConnected = false; });
+		socket.addEventListener('message', (ev: MessageEvent) => {
+			const msg = JSON.parse(ev.data);
+			if (msg.Log) {
+				pending.push(msg.Log);
+				scheduleFlush();
+			}
+		});
+	}
+	connect();
 </script>
 
-<main class="container-fluid mx-auto px-4">
-	<br />
-	{#each $payloads as payload}
-		<section>
-			<h2>State</h2>
-			<hr />
-			<br />
-			<ul class="indent-5">
-				<li>Raw: {payload.state}</li>
-			</ul>
-			<br />
-		</section>
-		<h2>EV Data</h2>
-		<hr />
-		<br />
-		<div class="  mx-auto px-4 flex flex-wrap gap-5 md:grid-cols-2">
-			<section>
-				<h2>X100</h2>
-				<ul>
-					<li>
-						Minimum Charge Current: {payload.x100.minimum_charge_current}
-					</li>
-					<li>
-						Minimum Battery Voltage: {payload.x100.minimum_battery_voltage}
-					</li>
-					<li>
-						Maximum Battery Voltage: {payload.x100.maximum_battery_voltage}
-					</li>
-					<li>
-						Constant of Charging Rate Indication: {payload.x100
-							.constant_of_charging_rate_indication}
-					</li>
-				</ul>
-			</section>
-			<section>
-				<h2>X101</h2>
-				<ul>
-					<li>
-						Max Charging Time (10s Bit): {payload.x101.max_charging_time_10s_bit}
-					</li>
-					<li>
-						Max Charging Time (1min Bit): {payload.x101.max_charging_time_1min_bit}
-					</li>
-					<li>
-						Estimated Charging Time: {payload.x101.estimated_charging_time}
-					</li>
-					<li>
-						Rated Battery Capacity: {payload.x101.rated_battery_capacity}
-					</li>
-				</ul>
-			</section>
-			<section>
-				<h2>X102</h2>
-				<ul>
-					<li>
-						Control Protocol Number EV: {payload.x102.control_protocol_number_ev}
-					</li>
-					<li>
-						Target Battery Voltage: {payload.x102.target_battery_voltage}
-					</li>
-					<li>
-						Charging Current Request: {payload.x102.charging_current_request}
-					</li>
-					<li>State of Charge: {payload.x102.state_of_charge}</li>
-					<li>Faults:</li>
-					<ul class="indent-5">
-						<li>
-							Fault Battery Voltage Deviation: {payload.x102.faults.fault_battery_voltage_deviation}
-						</li>
-						<li>
-							Fault High Battery Temperature: {payload.x102.faults.fault_high_battery_temperature}
-						</li>
-						<li>
-							Fault Battery Current Deviation: {payload.x102.faults.fault_battery_current_deviation}
-						</li>
-						<li>
-							Fault Battery Undervoltage: {payload.x102.faults.fault_battery_undervoltage}
-						</li>
-						<li>
-							Fault Battery Overvoltage: {payload.x102.faults.fault_battery_overvoltage}
-						</li>
-					</ul>
-					<li>Status:</li>
-					<ul class="indent-5">
-						<li>
-							Status Discharge Compatible: {payload.x102.status.status_discharge_compatible}
-						</li>
-						<li>
-							Status Normal Stop Request: {payload.x102.status.status_normal_stop_request}
-						</li>
-						<li>Status Vehicle: {payload.x102.status.status_vehicle}</li>
-						<li>
-							Status Charging System: {payload.x102.status.status_charging_system}
-						</li>
-						<li>
-							Status Vehicle Shifter Position: {payload.x102.status.status_vehicle_shifter_position}
-						</li>
-						<li>
-							Status Vehicle Charging: {payload.x102.status.status_vehicle_charging}
-						</li>
-					</ul>
-				</ul>
-			</section>
+<!-- status bar -->
+<div class="flex flex-wrap items-center gap-3 px-4 py-2 bg-surface-800 border-b border-surface-600 text-sm sticky top-0 z-10">
 
-			<section>
-				<h2>X200</h2>
-				<ul>
-					<li>
-						Maximum Discharge Current: {payload.x200.maximum_discharge_current}
-					</li>
-					<li>
-						Minimum Discharge Voltage: {payload.x200.minimum_discharge_voltage}
-					</li>
-					<li>
-						Minimum Battery Discharge Level: {payload.x200.minimum_battery_discharge_level}
-					</li>
-					<li>
-						Max Remaining Capacity for Charging: {payload.x200.max_remaining_capacity_for_charging}
-					</li>
-				</ul>
-			</section>
-		</div>
-		<br />
-		<h2>EVSE Data</h2>
-		<hr />
-		<br />
-		<div class="  mx-auto px-4 flex flex-wrap gap-5 md:grid-cols-2">
-			<section>
-				<h2>X108</h2>
-				<ul>
-					<li>
-						Available Output Current: {payload.x108.available_output_current}
-					</li>
-					<li>
-						Available Output Voltage: {payload.x108.avaible_output_voltage}
-					</li>
-					<li>Welding Detection: {payload.x108.welding_detection}</li>
-					<li>Threshold Voltage: {payload.x108.threshold_voltage}</li>
-				</ul>
-			</section>
-			<section>
-				<h2>X109</h2>
-				<ul>
-					<li>
-						Control Protocol Number QC: {payload.x109.control_protocol_number_qc}
-					</li>
-					<li>Output Voltage: {payload.x109.output_voltage}</li>
-					<li>Output Current: {payload.x109.output_current}</li>
-					<li>
-						Discharge Compatibility: {payload.x109.discharge_compatitiblity}
-					</li>
-					<li>
-						Remaining Charging Time (10s Bit): {payload.x109.remaining_charging_time_10s_bit}
-					</li>
-					<li>
-						Remaining Charging Time (1min Bit): {payload.x109.remaining_charging_time_1min_bit}
-					</li>
-					<li>Status:</li>
-					<ul class="indent-5">
-						<li>
-							Charger Stop Control: {payload.x109.status.status_charger_stop_control}
-						</li>
-						<li>
-							Fault Charging System Malfunction: {payload.x109.status
-								.fault_charging_system_malfunction}
-						</li>
-						<li>
-							Fault Battery Incompatibility: {payload.x109.status.fault_battery_incompatibility}
-						</li>
-						<li>
-							Vehicle Connector Lock: {payload.x109.status.status_vehicle_connector_lock}
-						</li>
-						<li>
-							Fault Station Malfunction: {payload.x109.status.fault_station_malfunction}
-						</li>
-						<li>Status Station: {payload.x109.status.status_station}</li>
-					</ul>
-				</ul>
-			</section>
-			<section>
-				<h2>X208</h2>
-				<ul>
-					<li>Discharge Current: {payload.x208.discharge_current}</li>
-					<li>Input Voltage: {payload.x208.input_voltage}</li>
-					<li>Input Current: {payload.x208.input_current}</li>
-					<li>
-						Lower Threshold Voltage: {payload.x208.lower_threshold_voltage}
-					</li>
-				</ul>
-			</section>
-			<section>
-				<h2>X209</h2>
-				<ul>
-					<li>Sequence: {payload.x209.sequence}</li>
-					<li>
-						Remaining Discharge Time: {payload.x209.remaing_discharge_time}
-					</li>
-				</ul>
-			</section>
-		</div>
-		<br />
-	{/each}
-</main>
+	<!-- level toggles -->
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={showError} class="w-3.5 h-3.5" />
+		<span class="font-mono text-red-400">ERROR</span>
+	</label>
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={showWarn} class="w-3.5 h-3.5" />
+		<span class="font-mono text-amber-400">WARN</span>
+	</label>
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={showInfo} class="w-3.5 h-3.5" />
+		<span class="font-mono text-sky-300">INFO</span>
+	</label>
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={showDebug} class="w-3.5 h-3.5" />
+		<span class="font-mono text-surface-400">DEBUG</span>
+	</label>
+
+	<div class="w-px h-5 bg-surface-500"></div>
+
+	<!-- grep include -->
+	<div class="flex items-center gap-1">
+		<span class="text-surface-400 text-xs font-mono">grep</span>
+		<input type="text" bind:value={grepInclude}
+			placeholder="include (comma-sep)"
+			class="input text-xs font-mono py-0.5 px-2 w-44 bg-surface-700" />
+	</div>
+
+	<!-- grep exclude -->
+	<div class="flex items-center gap-1">
+		<span class="text-surface-400 text-xs font-mono">grep&nbsp;-v</span>
+		<input type="text" bind:value={grepExclude}
+			placeholder="exclude (comma-sep)"
+			class="input text-xs font-mono py-0.5 px-2 w-44 bg-surface-700" />
+	</div>
+
+	<div class="w-px h-5 bg-surface-500"></div>
+
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={liveLog}
+			on:change={() => sendLogControl(liveLog)}
+			class="w-3.5 h-3.5" />
+		<span class="text-xs font-semibold {liveLog ? 'text-green-400' : 'text-surface-200'}">Live Logs</span>
+	</label>
+
+	<div class="w-px h-5 bg-surface-500"></div>
+
+	<label class="flex items-center gap-1 cursor-pointer select-none">
+		<input type="checkbox" bind:checked={autoScroll} class="w-3.5 h-3.5" />
+		<span class="text-xs {autoScroll ? 'text-green-400' : 'text-surface-200'}">Auto-scroll</span>
+	</label>
+
+	<button on:click={() => { entries = []; pending = []; }} class="btn btn-sm variant-ghost-surface text-xs py-0.5 px-2">
+		Clear
+	</button>
+
+	<span class="text-xs text-surface-500 ml-auto">
+		{#if !wsConnected}<span class="text-red-400 mr-2">● offline</span>{:else}<span class="text-green-400 mr-2">● live</span>{/if}
+		{filtered.length} / {entries.length}
+	</span>
+</div>
+
+<!-- log table -->
+<div bind:this={logEl} class="overflow-y-auto font-mono text-xs" style="height: calc(100vh - 48px);">
+	<table class="w-full border-collapse">
+		<thead class="sticky top-0 bg-surface-800 text-surface-400 text-left">
+			<tr>
+				<th class="px-2 py-1 whitespace-nowrap w-28">Time</th>
+				<th class="px-2 py-1 w-14">Level</th>
+				<th class="px-2 py-1 w-56">Module</th>
+				<th class="px-2 py-1 w-[36rem]">Message</th>
+				<th class="px-2 py-1">Value</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each filtered as e (e.ts + e.message)}
+				{@const [msg, val] = splitMsg(e.message)}
+				<tr class="border-t border-surface-700/40 hover:bg-surface-700/30 {rowClass(e.level)}">
+					<td class="px-2 py-0.5 text-surface-500 whitespace-nowrap">{e.ts}</td>
+					<td class="px-2 py-0.5 whitespace-nowrap {levelClass(e.level)}">{e.level}</td>
+					<td class="px-2 py-0.5 text-surface-400 truncate max-w-[14rem]" title={e.target}>{shortTarget(e.target)}</td>
+					<td class="px-2 py-0.5 break-words max-w-xs">{msg}</td>
+					<td class="px-2 py-0.5 text-cyan-700 dark:text-cyan-400 break-all">{val}</td>
+				</tr>
+			{/each}
+		</tbody>
+	</table>
+</div>
