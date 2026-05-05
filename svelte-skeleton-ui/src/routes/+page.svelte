@@ -188,8 +188,17 @@
 		: `top: 50%; height: ${gridBarPct}%`;
 	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
 
+	$: activeModeLabel =
+		snapshotReadyToDriveActive           ? 'Ready to Drive' :
+		snapshotOffPeakChargingActive        ? 'Off-Peak Charging' :
+		snapshotSmartExportActive            ? 'Smart Export' :
+		snapshotSmartExportExcessSolarActive ? 'Smart Export Excess Solar' :
+		snapshotSmartChargeActive            ? 'Smart Charge' :
+		snapshotEvDrainProtectionActive      ? 'EV Drain Protection' : '—';
+
 	$: batteryFillW = Math.max(0, (snapshotSoc / 100) * 38);
 	$: batteryColor = snapshotSoc > 50 ? '#22c55e' : snapshotSoc > 25 ? '#f59e0b' : '#ef4444';
+	$: batteryArrowColor = snapshotDcKw > 0 ? '#10b981' : '#60a5fa';
 
 	$: modePillClass =
 		snapshotMode === 'V2h'    ? 'bg-emerald-600 text-white' :
@@ -355,17 +364,32 @@
 
 	<!-- Operational Mode Card -->
 	<div class="card p-4 text-center w-72">
-		<div class="text-2xl font-bold mb-4 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
+		<div class="text-2xl font-bold mb-1 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
+		<div class="text-xs text-surface-400 mb-4">{activeModeLabel}</div>
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
 		<div class="text-2xl font-bold mb-1">{Math.round(snapshotSoc)}%</div>
 		<svg viewBox="0 0 50 24" class="w-20 h-10 mx-auto mb-3 text-surface-500 dark:text-surface-300">
+			<defs>
+				<clipPath id="bat-clip">
+					<rect x="3" y="5" width="38" height="14" rx="1.5"/>
+				</clipPath>
+			</defs>
 			<!-- body outline -->
 			<rect x="1" y="3" width="42" height="18" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
 			<!-- terminal nub -->
 			<rect x="43" y="9" width="6" height="6" rx="1" fill="currentColor"/>
 			<!-- fill bar -->
-			<rect x="3" y="5" width={batteryFillW} height="14" rx="1.5" fill={batteryColor}
-				class="{snapshotDcKw > 0 ? 'bat-charging' : snapshotDcKw < 0 ? 'bat-discharging' : ''}"/>
+			<rect x="3" y="5" width={batteryFillW} height="14" rx="1.5" fill={batteryColor}/>
+			<!-- direction arrow clipped to battery interior -->
+			{#if snapshotDcKw > 0}
+				<polygon
+					points="{3 + batteryFillW + 1},{7} {3 + batteryFillW + 6},{12} {3 + batteryFillW + 1},{17}"
+					fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
+			{:else if snapshotDcKw < 0}
+				<polygon
+					points="{3 + batteryFillW + 6},{7} {3 + batteryFillW + 1},{12} {3 + batteryFillW + 6},{17}"
+					fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
+			{/if}
 		</svg>
 		<div class="flex gap-6 justify-center mt-3">
 			<div class="flex flex-col items-center">
@@ -376,7 +400,7 @@
 					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
 				</div>
 				<div class="text-xl font-bold">{Math.abs(Math.round(snapshotDcKw))}</div>
-				<div class="text-xs text-surface-400">W</div>
+				<div class="text-xs text-surface-400">DC W</div>
 			</div>
 			<div class="flex flex-col items-center">
 				<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-0">Grid</div>
@@ -829,17 +853,6 @@
 <!-- </div> -->
 
 <style lang="postcss">
-	@keyframes bat-charge {
-		0%, 100% { opacity: 1; }
-		50%       { opacity: 0.55; }
-	}
-	@keyframes bat-discharge {
-		0%, 100% { opacity: 1; }
-		50%       { opacity: 0.35; }
-	}
-	.bat-charging   { animation: bat-charge    1.2s ease-in-out infinite; }
-	.bat-discharging{ animation: bat-discharge 2.5s ease-in-out infinite; }
-
 	figure {
 		@apply flex relative flex-col;
 	}
