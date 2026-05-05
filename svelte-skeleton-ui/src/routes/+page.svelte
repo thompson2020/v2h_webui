@@ -45,6 +45,7 @@
 	interface OperatorSettings {
 		v2h_soc_min:          number;
 		v2h_soc_max:          number;
+		v2h_soc_max_boost:    number;
 		v2h_max_amps:         number;
 		self_use:             boolean;
 		export_excess_solar:  boolean;
@@ -60,6 +61,7 @@
 		smart_charge:         boolean;
 		smart_export:                boolean;
 		smart_export_limit_w:        number;
+		smart_export_soc_min:        number;
 		smart_export_excess_solar:   boolean;
 		charge_soc_limit:            number;
 		charge_amps:          number;
@@ -114,6 +116,7 @@
 	//Auto/Load Balancing + Time Based + Event Based(Charge)e.g Additional Slots + Event Based Discharge (High export price)
 	let v2h_soc_min = 31;
 	let v2h_soc_max = 90;
+	let v2hBoostSocMax = 80;
 	let selfUse = true;
 	let exportExcessSolar = false;
 	let evDrainProtection = false;
@@ -126,6 +129,7 @@
 	let smartCharge = true;
 	let smartExport = false;
 	let smartExportLimit = 2500;
+	let smartExportSocMin = 31;
 	let showSmartExportOptions = false;
 	let smartExportExcessSolar = false;
 	let showSmartExportExcessSolarOptions = false;
@@ -184,6 +188,9 @@
 		: `top: 50%; height: ${gridBarPct}%`;
 	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
 
+	$: batteryFillW = Math.max(0, (snapshotSoc / 100) * 38);
+	$: batteryColor = snapshotSoc > 50 ? '#22c55e' : snapshotSoc > 25 ? '#f59e0b' : '#ef4444';
+
 	$: modePillClass =
 		snapshotMode === 'V2h'    ? 'bg-emerald-600 text-white' :
 		snapshotMode === 'Charge' ? 'bg-blue-600 text-white' :
@@ -209,6 +216,7 @@
 				SetSettings: {
 					v2h_soc_min:          v2h_soc_min,
 					v2h_soc_max:          v2h_soc_max,
+					v2h_soc_max_boost:    v2hBoostSocMax,
 					v2h_max_amps:         v2hMaxAmps,
 					self_use:             selfUse,
 					export_excess_solar:  exportExcessSolar,
@@ -224,6 +232,7 @@
 					smart_charge:         smartCharge,
 					smart_export:                smartExport,
 					smart_export_limit_w:        smartExportLimit,
+					smart_export_soc_min:        smartExportSocMin,
 					smart_export_excess_solar:   smartExportExcessSolar,
 					charge_soc_limit:            soc_range_value,
 					charge_amps:          amps_value,
@@ -236,6 +245,7 @@
 	function applySettings(s: OperatorSettings) {
 		v2h_soc_min        = s.v2h_soc_min;
 		v2h_soc_max        = s.v2h_soc_max;
+		v2hBoostSocMax     = s.v2h_soc_max_boost;
 		v2hMaxAmps         = s.v2h_max_amps;
 		selfUse            = s.self_use;
 		exportExcessSolar  = s.export_excess_solar;
@@ -251,6 +261,7 @@
 		smartCharge        = s.smart_charge;
 		smartExport             = s.smart_export;
 		smartExportLimit        = s.smart_export_limit_w;
+		smartExportSocMin       = s.smart_export_soc_min;
 		smartExportExcessSolar  = s.smart_export_excess_solar;
 		soc_range_value         = s.charge_soc_limit;
 		amps_value         = s.charge_amps;
@@ -340,26 +351,62 @@
 {/if}
 
 <br />
-<div class="container mx-auto px-4 flex flex-wrap gap-2" class:mt-12={!wsConnected}>
+<div class="container mx-auto px-4 flex flex-wrap gap-2 justify-center" class:mt-12={!wsConnected}>
 
-	<!-- EV Power Card -->
-	<div class="card p-4">
-		<button
-			class="btn {snapshotMode === 'Idle' ? 'bg-white text-black border-2 border-black' : 'variant-filled'}"
-			on:click={() => sendModeChange('Idle')}
-		>
-			Idle
-		</button>
+	<!-- Operational Mode Card -->
+	<div class="card p-4 text-center w-72">
+		<div class="text-2xl font-bold mb-4 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
+		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
+		<div class="text-2xl font-bold mb-1">{Math.round(snapshotSoc)}%</div>
+		<svg viewBox="0 0 50 24" class="w-20 h-10 mx-auto mb-3 text-surface-500 dark:text-surface-300">
+			<!-- body outline -->
+			<rect x="1" y="3" width="42" height="18" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
+			<!-- terminal nub -->
+			<rect x="43" y="9" width="6" height="6" rx="1" fill="currentColor"/>
+			<!-- fill bar -->
+			<rect x="3" y="5" width={batteryFillW} height="14" rx="1.5" fill={batteryColor}
+				class="{snapshotDcKw > 0 ? 'bat-charging' : snapshotDcKw < 0 ? 'bat-discharging' : ''}"/>
+		</svg>
+		<div class="flex gap-6 justify-center mt-3">
+			<div class="flex flex-col items-center">
+				<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-0">Battery</div>
+				<div class="text-xs text-surface-400 mb-1">{snapshotDcKw > 0 ? 'Charging' : snapshotDcKw < 0 ? 'Discharging' : '—'}</div>
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden mb-2">
+					<div class="absolute left-0 w-full {dcBarColor}" style="{dcBarStyle}"></div>
+					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+				</div>
+				<div class="text-xl font-bold">{Math.abs(Math.round(snapshotDcKw))}</div>
+				<div class="text-xs text-surface-400">W</div>
+			</div>
+			<div class="flex flex-col items-center">
+				<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-0">Grid</div>
+				<div class="text-xs text-surface-400 mb-1">{snapshotMeterW > 0 ? 'Import' : snapshotMeterW < 0 ? 'Export' : '—'}</div>
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden mb-2">
+					<div class="absolute left-0 w-full {gridBarColor}" style="{gridBarStyle}"></div>
+					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+				</div>
+				<div class="text-xl font-bold">{Math.abs(Math.round(snapshotMeterW))}</div>
+				<div class="text-xs text-surface-400">W</div>
+			</div>
+		</div>
 	</div>
 
 	<!--Smart Self-Powered Card-->
-	<div class="card p-4">
-		<button
-			class="btn {snapshotMode === 'V2h' ? 'bg-emerald-600 text-white' : 'variant-filled'}"
-			on:click={() => sendModeChange('V2h')}
-		>
-			V2H
-		</button>
+	<div class="card p-4 w-72">
+		<div class="flex justify-between mb-4">
+			<button
+				class="btn w-24 {snapshotMode === 'Idle' ? 'bg-white text-black border-2 border-black' : 'variant-filled'}"
+				on:click={() => sendModeChange('Idle')}
+			>
+				Idle
+			</button>
+			<button
+				class="btn w-24 {snapshotMode === 'V2h' ? 'bg-emerald-600 text-white' : 'variant-filled'}"
+				on:click={() => sendModeChange('V2h')}
+			>
+				V2H
+			</button>
+		</div>
 
 		<!-- V2H Settings dropdown -->
 		<div class="text-sm mt-2">
@@ -379,9 +426,15 @@
 							<div class="text-xs">{v2h_soc_min}%</div>
 						</div>
 					</RangeSlider>
+					<RangeSlider name="soc-max-boost" bind:value={v2hBoostSocMax} on:change={sendSettings} min={0} max={100} step={5} ticked>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">SoC Max (Off-Peak / Smart Charge)</div>
+							<div class="text-xs">{v2hBoostSocMax}%</div>
+						</div>
+					</RangeSlider>
 					<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
 						<div class="flex justify-between items-center">
-							<div class="text-xs">SoC Max</div>
+							<div class="text-xs">SoC Max (Solar)</div>
 							<div class="text-xs">{v2h_soc_max}%</div>
 						</div>
 					</RangeSlider>
@@ -484,7 +537,6 @@
 					</label>
 				</div>
 				{#if showOffPeakOptions}
-					<div class="mt-0.5 ml-4 text-xs text-surface-400">uses Charge SoC/Amps</div>
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
 						<div class="flex justify-between items-center">
 							<span>Start</span>
@@ -519,13 +571,21 @@
 				</div>
 				{#if showSmartExportOptions}
 					<div class="mt-1 ml-4 text-xs text-surface-400">Export when prices are high</div>
-					<div class="mt-2 ml-4 flex justify-between items-center text-surface-600 dark:text-surface-300">
-						<span>Export Limit</span>
-						<div class="flex items-center gap-1">
-							<input type="number" bind:value={smartExportLimit} on:change={sendSettings}
-								min="0" max="10000" step="100"
-								class="input w-20 text-right text-sm py-0.5 px-1" />
-							<span class="text-xs">W</span>
+					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<RangeSlider name="smart-export-soc-min" bind:value={smartExportSocMin} on:change={sendSettings} min={0} max={100} step={5} ticked>
+							<div class="flex justify-between items-center">
+								<div class="text-xs">SoC Min (Smart Export)</div>
+								<div class="text-xs">{smartExportSocMin}%</div>
+							</div>
+						</RangeSlider>
+						<div class="flex justify-between items-center">
+							<span>Export Limit</span>
+							<div class="flex items-center gap-1">
+								<input type="number" bind:value={smartExportLimit} on:change={sendSettings}
+									min="0" max="10000" step="100"
+									class="input w-20 text-right text-sm py-0.5 px-1" />
+								<span class="text-xs">W</span>
+							</div>
 						</div>
 					</div>
 				{/if}
@@ -568,7 +628,6 @@
 				</div>
 				{#if showSmartChargeOptions}
 					<div class="mt-1 ml-4 text-xs text-surface-400">Charge during cheap import slots</div>
-					<div class="mt-0.5 ml-4 text-xs text-surface-400">uses Charge SoC/Amps</div>
 				{/if}
 			</div>
 
@@ -597,12 +656,14 @@
 	</div>
 
 	<!-- Charge Card -->
-	<div class="card p-4">
-		<button
-			class="btn flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'bg-blue-600 text-white' : 'variant-filled'}"
-			on:click={submitCharge}>
-			Boost
-		</button>
+	<div class="card p-4 w-72">
+		<div class="flex justify-end mb-4">
+			<button
+				class="btn w-24 {snapshotMode === 'Charge' ? 'bg-blue-600 text-white' : 'variant-filled'}"
+				on:click={submitCharge}>
+				Boost
+			</button>
+		</div>
 
 		<!-- Charge Settings dropdown -->
 		<div class="text-sm mt-2">
@@ -627,7 +688,7 @@
 						ticked
 					>
 						<div class="flex justify-between items-center">
-							<div class="text-xs">SoC</div>
+							<div class="text-xs">SoC Max</div>
 							<div class="text-xs">{soc_range_value} / 100</div>
 						</div>
 					</RangeSlider>
@@ -641,7 +702,7 @@
 						ticked
 					>
 						<div class="flex justify-between items-center">
-							<div class="text-xs">Amps</div>
+							<div class="text-xs">Max Amps</div>
 							<div class="text-xs">{amps_value} / 16</div>
 						</div>
 					</RangeSlider>
@@ -658,29 +719,7 @@
 		</div>
 	</div>
 
-	<!-- Operational Mode Card -->
-	<div class="card p-4 text-center">
-		<div class="text-2xl font-bold mb-4 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
-		<div class="text-2xl font-bold mb-4">{snapshotSoc.toFixed(1)}%</div>
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">{snapshotDcKw > 50 ? 'Charging' : snapshotDcKw < -50 ? 'Discharging' : 'Power'}</div>
-		<div class="flex flex-col items-center mb-2">
-			<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
-				<div class="absolute left-0 w-full rounded-full {dcBarColor}" style="{dcBarStyle}"></div>
-				<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
-			</div>
-		</div>
-		<div class="text-2xl font-bold">{Math.abs(Math.round(snapshotDcKw))} W</div>
-		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1 mt-3">{snapshotMeterW > 50 ? 'Grid Import' : snapshotMeterW < -50 ? 'Grid Export' : 'Grid'}</div>
-		<div class="flex flex-col items-center mb-2">
-			<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
-				<div class="absolute left-0 w-full rounded-full {gridBarColor}" style="{gridBarStyle}"></div>
-				<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
-			</div>
-		</div>
-		<div class="text-2xl font-bold">{Math.abs(Math.round(snapshotMeterW))} W</div>
-	</div>
-
+	{#if $eventData.length > 0}
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
 		<h2>Event Table</h2>
 		<table id="eventsTable" class="table table-hover">
@@ -708,6 +747,7 @@
 			<button id="updateButton">Update</button>
 		</div>
 	</div>
+	{/if}
 
 </div>
 
@@ -789,6 +829,17 @@
 <!-- </div> -->
 
 <style lang="postcss">
+	@keyframes bat-charge {
+		0%, 100% { opacity: 1; }
+		50%       { opacity: 0.55; }
+	}
+	@keyframes bat-discharge {
+		0%, 100% { opacity: 1; }
+		50%       { opacity: 0.35; }
+	}
+	.bat-charging   { animation: bat-charge    1.2s ease-in-out infinite; }
+	.bat-discharging{ animation: bat-discharge 2.5s ease-in-out infinite; }
+
 	figure {
 		@apply flex relative flex-col;
 	}
