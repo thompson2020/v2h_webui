@@ -129,6 +129,8 @@
 	let showSmartExportOptions = false;
 	let smartExportExcessSolar = false;
 	let showSmartExportExcessSolarOptions = false;
+	let showV2hSettings = false;
+	let showChargeSettings = false;
 	let showReadyToDriveOptions = false;
 	let readyToDriveDays = [false, false, false, false, false, false, false]; // M T W T F S S
 	let showOffPeakOptions = false;
@@ -183,8 +185,8 @@
 	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
 
 	$: modePillClass =
-		snapshotMode === 'V2h'    ? 'bg-blue-600 text-white' :
-		snapshotMode === 'Charge' ? 'bg-emerald-600 text-white' :
+		snapshotMode === 'V2h'    ? 'bg-emerald-600 text-white' :
+		snapshotMode === 'Charge' ? 'bg-blue-600 text-white' :
 		snapshotMode === 'Idle'   ? 'bg-white text-black border-2 border-black' :
 		'border-2 border-surface-400 text-surface-400';
 
@@ -353,40 +355,44 @@
 	<!--Smart Self-Powered Card-->
 	<div class="card p-4">
 		<button
-			class="btn {snapshotMode === 'V2h' ? 'bg-blue-600 text-white' : 'variant-filled'}"
+			class="btn {snapshotMode === 'V2h' ? 'bg-emerald-600 text-white' : 'variant-filled'}"
 			on:click={() => sendModeChange('V2h')}
 		>
 			V2H
 		</button>
 
-			<!-- SOC Min -->
-			<div class="mt-2">
-				<RangeSlider name="soc-min" bind:value={v2h_soc_min} on:change={sendSettings} min={0} max={100} step={5} ticked>
-					<div class="flex justify-between items-center">
-						<div class="text-xs">SoC Min</div>
-						<div class="text-xs">{v2h_soc_min}%</div>
-					</div>
-				</RangeSlider>
+		<!-- V2H Settings dropdown -->
+		<div class="text-sm mt-2">
+			<div class="flex items-center">
+				<button type="button"
+					class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+					on:click={() => (showV2hSettings = !showV2hSettings)}>
+					<span class="text-xs w-3 text-center">{showV2hSettings ? '▼' : '▶'}</span>
+					<span>Settings</span>
+				</button>
 			</div>
-			<!-- SOC Max -->
-			<div class="mt-2">
-				<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
-					<div class="flex justify-between items-center">
-						<div class="text-xs">SoC Max</div>
-						<div class="text-xs">{v2h_soc_max}%</div>
-					</div>
-				</RangeSlider>
-			</div>
-
-
-		<!-- Max Amps -->
-		<div class="mt-2">
-			<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} on:change={sendSettings} min={0} max={16} step={1} ticked>
-				<div class="flex justify-between items-center">
-					<div class="text-xs">Max Amps</div>
-					<div class="text-xs">{v2hMaxAmps}A</div>
+			{#if showV2hSettings}
+				<div class="mt-2 ml-4 flex flex-col gap-2">
+					<RangeSlider name="soc-min" bind:value={v2h_soc_min} on:change={sendSettings} min={0} max={100} step={5} ticked>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">SoC Min</div>
+							<div class="text-xs">{v2h_soc_min}%</div>
+						</div>
+					</RangeSlider>
+					<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">SoC Max</div>
+							<div class="text-xs">{v2h_soc_max}%</div>
+						</div>
+					</RangeSlider>
+					<RangeSlider name="v2h-amps" bind:value={v2hMaxAmps} on:change={sendSettings} min={0} max={16} step={1} ticked>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">Max Amps</div>
+							<div class="text-xs">{v2hMaxAmps}A</div>
+						</div>
+					</RangeSlider>
 				</div>
-			</RangeSlider>
+			{/if}
 		</div>
 
 		<!-- Options -->
@@ -478,6 +484,7 @@
 					</label>
 				</div>
 				{#if showOffPeakOptions}
+					<div class="mt-0.5 ml-4 text-xs text-surface-400">uses Charge SoC/Amps</div>
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
 						<div class="flex justify-between items-center">
 							<span>Start</span>
@@ -592,44 +599,58 @@
 	<!-- Charge Card -->
 	<div class="card p-4">
 		<button
-			class="btn flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'bg-emerald-600 text-white' : 'variant-filled'}"
+			class="btn flex justify-between items-center mb-4 {snapshotMode === 'Charge' ? 'bg-blue-600 text-white' : 'variant-filled'}"
 			on:click={submitCharge}>
-			Charge
+			Boost
 		</button>
 
-		<RangeSlider
-			name="soc"
-			id="range-slider-boost-soc"
-			bind:value={soc_range_value}
-			on:change={sendSettings}
-			min={10}
-			max={100}
-			step={5}
-			ticked
-		>
-			<div class="flex justify-between items-center">
-				<div class="text-xs">SoC</div>
-				<div class="text-xs">{soc_range_value} / 100</div>
+		<!-- Charge Settings dropdown -->
+		<div class="text-sm mt-2">
+			<div class="flex items-center">
+				<button type="button"
+					class="flex items-center gap-1 hover:text-primary-500 transition-colors"
+					on:click={() => (showChargeSettings = !showChargeSettings)}>
+					<span class="text-xs w-3 text-center">{showChargeSettings ? '▼' : '▶'}</span>
+					<span>Settings</span>
+				</button>
 			</div>
-		</RangeSlider>
-
-		<RangeSlider
-			name="amps"
-			id="range-slider-amps"
-			bind:value={amps_value}
-			on:change={sendSettings}
-			max={16}
-			step={1}
-			ticked
-		>
-			<div class="flex justify-between items-center">
-				<div class="text-xs">Amps</div>
-				<div class="text-xs">{amps_value} / 16</div>
-			</div>
-		</RangeSlider>
+			{#if showChargeSettings}
+				<div class="mt-2 ml-4 flex flex-col gap-2">
+					<RangeSlider
+						name="soc"
+						id="range-slider-boost-soc"
+						bind:value={soc_range_value}
+						on:change={sendSettings}
+						min={10}
+						max={100}
+						step={5}
+						ticked
+					>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">SoC</div>
+							<div class="text-xs">{soc_range_value} / 100</div>
+						</div>
+					</RangeSlider>
+					<RangeSlider
+						name="amps"
+						id="range-slider-amps"
+						bind:value={amps_value}
+						on:change={sendSettings}
+						max={16}
+						step={1}
+						ticked
+					>
+						<div class="flex justify-between items-center">
+							<div class="text-xs">Amps</div>
+							<div class="text-xs">{amps_value} / 16</div>
+						</div>
+					</RangeSlider>
+				</div>
+			{/if}
+		</div>
 
 		<div class="mt-3 flex justify-between items-center text-sm">
-			<span title="Charge using solar power only">Eco (Use Solar Only)</span>
+			<span title="Charge using solar power only" class="mr-2">Eco (Use Solar Only)</span>
 			<label class="relative inline-flex items-center cursor-pointer">
 				<input type="checkbox" bind:checked={chargeEco} class="sr-only peer" on:change={sendSettings} />
 				<div class="w-9 h-5 bg-surface-300 rounded-full peer peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
