@@ -1,13 +1,8 @@
-<!-- 
+<!--
 
 	Todo:
 
-		Change header/nav colour based on mode - https://www.skeleton.dev/docs/themes
-		Make WS client a singleton or globally available? (WIP)
-		Disable UI on WS disconnect (see static pages)
 		Implement Event Table actions (Edit, Delete, Add Event & Update)
-		Retreive current mode from State (table) and update Mode Selection
-		Display WS bad acks {"ack": "err"}
 
  -->
 <script lang="ts">
@@ -111,6 +106,8 @@
 	let socket: WebSocket;
 	let wsConnected = false;
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	let ackError = false;
+	let ackErrorTimer: ReturnType<typeof setTimeout> | null = null;
 	let time = '';
 
 	//Auto/Load Balancing + Time Based + Event Based(Charge)e.g Additional Slots + Event Based Discharge (High export price)
@@ -307,6 +304,11 @@
 
 		socket.addEventListener('message', (event: MessageEvent) => {
 			const message = JSON.parse(event.data);
+			if (message.ack === 'err') {
+				ackError = true;
+				if (ackErrorTimer) clearTimeout(ackErrorTimer);
+				ackErrorTimer = setTimeout(() => { ackError = false; }, 4000);
+			}
 			if (message.Events) {
 				eventData.set(message.Events);
 			}
@@ -357,6 +359,11 @@
 {#if !wsConnected}
 <div class="fixed top-0 left-0 right-0 z-50 bg-error-500 text-white text-center py-3 px-4 font-semibold shadow-lg">
 	E-Stop active or charger offline — twist E-Stop to release &nbsp;·&nbsp; <span class="font-normal opacity-80">Reconnecting…</span>
+</div>
+{/if}
+{#if ackError}
+<div class="fixed top-0 left-0 right-0 z-50 bg-warning-500 text-white text-center py-3 px-4 font-semibold shadow-lg">
+	Command rejected by charger
 </div>
 {/if}
 
