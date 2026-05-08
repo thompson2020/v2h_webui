@@ -20,11 +20,14 @@
 				<strong class="text-xl uppercase">V2H</strong>
 			</svelte:fragment>
 			<svelte:fragment slot="trail">
-				{#if $page.url.pathname === '/'}
-					<a class="btn btn-sm variant-ghost-surface" href="./debug" rel="noreferrer"> Debug </a>
+				{#if $page.url.pathname !== '/'}
+					<a class="btn btn-sm variant-ghost-surface" href="/" rel="noreferrer"> Home </a>
 				{/if}
-				{#if $page.url.pathname === '/debug'}
-					<a class="btn btn-sm variant-ghost-surface" href="./" rel="noreferrer"> Home </a>
+				{#if $page.url.pathname !== '/data'}
+					<a class="btn btn-sm variant-ghost-surface" href="/data" rel="noreferrer"> Data </a>
+				{/if}
+				{#if $page.url.pathname !== '/debug'}
+					<a class="btn btn-sm variant-ghost-surface" href="/debug" rel="noreferrer"> Debug </a>
 				{/if}
 				<LightSwitch />
 			</svelte:fragment>
