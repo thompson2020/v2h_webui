@@ -173,6 +173,8 @@
 	let snapshotSoc = 0;
 	let snapshotDcKw = 0;
 	let snapshotMeterW = 0;
+	let snapshotPhaseW = 0;
+	let snapshotChargerW = 0;
 	let snapshotSmartChargeRequest = false;
 	let snapshotSmartChargeActive = false;
 	let snapshotEvDrainProtectionRequest = false;
@@ -202,6 +204,14 @@
 	$: gridBarPct   = Math.min(Math.abs(snapshotMeterW) / DC_BAR_MAX_W * 50, 50);
 	$: gridBarStyle = snapshotMeterW >= 0 ? `bottom: 50%; height: ${gridBarPct}%` : `top: 50%; height: ${gridBarPct}%`;
 	$: gridBarColor = snapshotMeterW > 50 ? 'bg-amber-500' : snapshotMeterW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
+
+	$: phaseBarPct   = Math.min(Math.abs(snapshotPhaseW) / DC_BAR_MAX_W * 50, 50);
+	$: phaseBarStyle = snapshotPhaseW >= 0 ? `bottom: 50%; height: ${phaseBarPct}%` : `top: 50%; height: ${phaseBarPct}%`;
+	$: phaseBarColor = snapshotPhaseW > 50 ? 'bg-amber-500' : snapshotPhaseW < -50 ? 'bg-emerald-500' : 'bg-surface-400';
+
+	$: acBarPct   = Math.min(Math.abs(snapshotChargerW) / DC_BAR_MAX_W * 50, 50);
+	$: acBarStyle = snapshotChargerW >= 0 ? `bottom: 50%; height: ${acBarPct}%` : `top: 50%; height: ${acBarPct}%`;
+	$: acBarColor = snapshotChargerW > 50 ? 'bg-emerald-500' : snapshotChargerW < -50 ? 'bg-blue-400' : 'bg-surface-400';
 
 	$: activeModeLabel =
 		snapshotReadyToDriveActive           ? 'Ready to Drive' :
@@ -347,6 +357,8 @@
 				snapshotSoc    = d.chademo?.soc ?? 0;
 				snapshotDcKw   = (d.pre?.dc_output_volts ?? 0) * (d.pre?.dc_output_amps ?? 0);
 				snapshotMeterW = d.meter?.total_w ?? 0;
+				snapshotPhaseW   = d.meter?.phase_w   ?? 0;
+				snapshotChargerW = d.meter?.charger_w ?? 0;
 				snapshotSmartChargeRequest              = d.supervisory?.smart_charge_request ?? false;
 				snapshotSmartChargeActive               = d.supervisory?.smart_charge_active ?? false;
 				snapshotEvDrainProtectionRequest        = d.supervisory?.ev_drain_protection_request ?? false;
@@ -397,38 +409,65 @@
 		<div class="text-xs text-surface-400 mb-4">{activeModeLabel}</div>
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
 		<div class="text-2xl font-bold mb-1">{Math.round(snapshotSoc)}%</div>
-		<svg viewBox="0 0 50 24" class="w-20 h-10 mx-auto mb-3 text-surface-500 dark:text-surface-300">
-			<defs><clipPath id="bat-clip"><rect x="3" y="5" width="38" height="14" rx="1.5"/></clipPath></defs>
-			<rect x="1" y="3" width="42" height="18" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
-			<rect x="43" y="9" width="6" height="6" rx="1" fill="currentColor"/>
-			<rect x="3" y="5" width={batteryFillW} height="14" rx="1.5" fill={batteryColor}/>
-			{#if snapshotDcKw > 0}
-				<polygon points="{3 + batteryFillW + 1},{7} {3 + batteryFillW + 6},{12} {3 + batteryFillW + 1},{17}" fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
-			{:else if snapshotDcKw < 0}
-				<polygon points="{3 + batteryFillW + 6},{7} {3 + batteryFillW + 1},{12} {3 + batteryFillW + 6},{17}" fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
-			{/if}
-		</svg>
-		<div class="flex gap-6 justify-center mt-3">
-			<div class="flex flex-col items-center">
-				<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-0">Battery</div>
-				<div class="text-xs text-surface-400 mb-1">{snapshotDcKw > 0 ? 'Charging' : snapshotDcKw < 0 ? 'Discharging' : '—'}</div>
-				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden mb-2">
+		<div class="flex items-center justify-center gap-2 mb-3">
+			<svg viewBox="0 0 50 24" class="w-20 h-10 text-surface-500 dark:text-surface-300">
+				<defs><clipPath id="bat-clip"><rect x="3" y="5" width="38" height="14" rx="1.5"/></clipPath></defs>
+				<rect x="1" y="3" width="42" height="18" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
+				<rect x="43" y="9" width="6" height="6" rx="1" fill="currentColor"/>
+				<rect x="3" y="5" width={batteryFillW} height="14" rx="1.5" fill={batteryColor}/>
+				{#if snapshotDcKw > 0}
+					<polygon points="{3 + batteryFillW + 1},{7} {3 + batteryFillW + 6},{12} {3 + batteryFillW + 1},{17}" fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
+				{:else if snapshotDcKw < 0}
+					<polygon points="{3 + batteryFillW + 6},{7} {3 + batteryFillW + 1},{12} {3 + batteryFillW + 6},{17}" fill={batteryArrowColor} clip-path="url(#bat-clip)"/>
+				{/if}
+			</svg>
+			<div class="flex flex-col gap-0.5 text-surface-400 leading-none" style="font-size:0.6rem;">
+				<span>⊹ {latest?.pre?.temp != null ? Math.round(latest.pre.temp) : '—'}°C</span>
+				<span>⟳ {latest?.pre?.fan_duty ?? '—'}%</span>
+			</div>
+		</div>
+		<div class="grid grid-cols-4 gap-3 mt-3">
+			<!-- titles row -->
+			<div class="col-span-2 text-center text-sm font-semibold text-surface-500 dark:text-surface-400">Battery</div>
+			<div class="text-center text-sm font-semibold text-surface-500 dark:text-surface-400">Grid</div>
+			<div class="text-center text-sm font-semibold text-surface-500 dark:text-surface-400">Phase</div>
+			<!-- subtitle row -->
+			<div class="col-span-2 text-center text-xs text-surface-400">{snapshotDcKw > 0 ? 'Charging' : snapshotDcKw < 0 ? 'Discharging' : '—'}</div>
+			<div class="text-center text-xs text-surface-400">{snapshotMeterW > 0 ? 'Import' : snapshotMeterW < 0 ? 'Export' : '—'}</div>
+			<div class="text-center text-xs text-surface-400">{snapshotPhaseW > 0 ? 'Import' : snapshotPhaseW < 0 ? 'Export' : '—'}</div>
+			<!-- bars row -->
+			<div class="flex justify-center">
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
 					<div class="absolute left-0 w-full {dcBarColor}" style="{dcBarStyle}"></div>
 					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
 				</div>
-				<div class="text-xl font-bold">{Math.abs(Math.round(snapshotDcKw))}</div>
-				<div class="text-xs text-surface-400">DC W</div>
 			</div>
-			<div class="flex flex-col items-center">
-				<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-0">Grid</div>
-				<div class="text-xs text-surface-400 mb-1">{snapshotMeterW > 0 ? 'Import' : snapshotMeterW < 0 ? 'Export' : '—'}</div>
-				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden mb-2">
+			<div class="flex justify-center">
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
+					<div class="absolute left-0 w-full {acBarColor}" style="{acBarStyle}"></div>
+					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+				</div>
+			</div>
+			<div class="flex justify-center">
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
 					<div class="absolute left-0 w-full {gridBarColor}" style="{gridBarStyle}"></div>
 					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
 				</div>
-				<div class="text-xl font-bold">{Math.abs(Math.round(snapshotMeterW))}</div>
-				<div class="text-xs text-surface-400">W</div>
 			</div>
+			<div class="flex justify-center">
+				<div class="relative w-6 h-28 bg-surface-300 rounded-full overflow-hidden">
+					<div class="absolute left-0 w-full {phaseBarColor}" style="{phaseBarStyle}"></div>
+					<div class="absolute left-0 w-full top-1/2 h-px bg-surface-500"></div>
+				</div>
+			</div>
+			<!-- values row -->
+			<div class="col-span-2 flex justify-around items-end">
+				<div class="text-center"><div class="text-lg font-bold">{Math.abs(Math.round(snapshotDcKw))}</div><div class="text-xs text-surface-400">DC W</div></div>
+				<div class="text-center"><div class="text-xs text-surface-400">Eff</div><div class="text-xs">{latest?.meter?.efficiency != null ? latest.meter.efficiency.toFixed(0) + '%' : '—'}</div></div>
+				<div class="text-center"><div class="text-lg font-bold">{Math.abs(Math.round(snapshotChargerW))}</div><div class="text-xs text-surface-400">AC W</div></div>
+			</div>
+			<div class="text-center"><div class="text-lg font-bold">{Math.abs(Math.round(snapshotMeterW))}</div><div class="text-xs text-surface-400">W</div></div>
+			<div class="text-center"><div class="text-lg font-bold">{Math.abs(Math.round(snapshotPhaseW))}</div><div class="text-xs text-surface-400">W</div></div>
 		</div>
 	</div>
 
@@ -699,66 +738,50 @@
 		<div style="overflow-x: auto;">
 			<table id="dataTable" style="white-space: nowrap; border-collapse: collapse; width: 100%;">
 				<thead>
-					<tr style="border-bottom: 2px solid var(--color-surface-400);">
-						<th class="p-2 text-left" rowspan="2">Time</th>
-						<th class="p-2 text-left text-primary-500" colspan="3" style="border-left: 1px solid var(--color-surface-400);">CHAdeMO</th>
-						<th class="p-2 text-left text-secondary-500" colspan="10" style="border-left: 1px solid var(--color-surface-400);">Pre-Charger</th>
-						<th class="p-2 text-left text-tertiary-500" colspan="6" style="border-left: 1px solid var(--color-surface-400);">Meter</th>
-						<th class="p-2 text-left text-success-500" colspan="4" style="border-left: 1px solid var(--color-surface-400);">Supervisory</th>
+					<tr style="border-bottom: 1px solid var(--color-surface-600);">
+						<th class="px-2 py-1 text-left text-xs font-semibold text-surface-400 align-bottom" rowspan="2">Time</th>
+						<th class="px-2 py-1 text-left text-xs font-semibold text-surface-400 align-bottom" rowspan="2" style="border-left: 1px solid var(--color-surface-600);">State</th>
+						<th class="px-2 py-1 text-left text-xs font-semibold text-primary-500" colspan="2" style="border-left: 1px solid var(--color-surface-600);">CHAdeMO</th>
+						<th class="px-2 py-1 text-left text-xs font-semibold text-secondary-500" colspan="6" style="border-left: 1px solid var(--color-surface-600);">PRE Charger</th>
+						<th class="px-2 py-1 text-left text-xs font-semibold text-tertiary-500" colspan="2" style="border-left: 1px solid var(--color-surface-600);">Meter</th>
+						<th class="px-2 py-1 text-left text-xs font-semibold text-success-500" colspan="4" style="border-left: 1px solid var(--color-surface-600);">Supervisory</th>
 					</tr>
-					<tr style="border-bottom: 1px solid var(--color-surface-300);">
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SoC</th>
-						<th class="p-2 text-left text-xs">State</th>
-						<th class="p-2 text-left text-xs">Req A</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">PRE State</th>
-						<th class="p-2 text-left text-xs">DC V SP</th>
-						<th class="p-2 text-left text-xs">DC A SP</th>
-						<th class="p-2 text-left text-xs">DC Out V</th>
-						<th class="p-2 text-left text-xs">DC Out A</th>
-						<th class="p-2 text-left text-xs">DC W</th>
-						<th class="p-2 text-left text-xs">DC Bus V</th>
-						<th class="p-2 text-left text-xs">AC A</th>
-						<th class="p-2 text-left text-xs">Temp</th>
-						<th class="p-2 text-left text-xs">Fan</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">Total W</th>
-						<th class="p-2 text-left text-xs">Phase W</th>
-						<th class="p-2 text-left text-xs">Chgr V</th>
-						<th class="p-2 text-left text-xs">Chgr A</th>
-						<th class="p-2 text-left text-xs">Chgr W</th>
-						<th class="p-2 text-left text-xs">Eff %</th>
-						<th class="p-2 text-left text-xs" style="border-left: 1px solid var(--color-surface-400);">SE Req</th>
-						<th class="p-2 text-left text-xs">SEES Req</th>
-						<th class="p-2 text-left text-xs">SC Req</th>
-						<th class="p-2 text-left text-xs">EDP Req</th>
+					<tr style="border-bottom: 1px solid var(--color-surface-600);">
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400" style="border-left: 1px solid var(--color-surface-600);">SoC</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">Req A</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400" style="border-left: 1px solid var(--color-surface-600);">State</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">DC V SP</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">DC Out V</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">DC A SP</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">DC Out A</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">DC W</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400" style="border-left: 1px solid var(--color-surface-600);">Chgr W</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">Total W</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400" style="border-left: 1px solid var(--color-surface-600);">SE Req</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">SEES Req</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">SC Req</th>
+						<th class="px-2 py-1 text-left text-xs font-normal text-surface-400">EDP Req</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each $realTimeData as rtd}
-						<tr>
-							<td class="p-2">{rtd.time}</td>
-							<td class="p-2">{Math.round(rtd.chademo?.soc ?? 0)}%</td>
-							<td class="p-2">{typeof rtd.chademo?.state === 'object' && rtd.chademo?.state !== null ? Object.keys(rtd.chademo.state)[0] : rtd.chademo?.state ?? '—'}</td>
-							<td class="p-2">{(rtd.chademo?.x102?.charging_current_request ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{rtd.pre?.state ?? '—'}</td>
-							<td class="p-2">{(rtd.pre?.dc_output_volts_setpoint ?? 0).toFixed(1)}V</td>
-							<td class="p-2">{(rtd.pre?.dc_output_amps_setpoint ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{(rtd.pre?.dc_output_volts ?? 0).toFixed(1)}V</td>
-							<td class="p-2">{(rtd.pre?.dc_output_amps ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{Math.round((rtd.pre?.dc_output_volts ?? 0) * (rtd.pre?.dc_output_amps ?? 0))}W</td>
-							<td class="p-2">{(rtd.pre?.dc_bus_volts ?? 0).toFixed(1)}V</td>
-							<td class="p-2">{(rtd.pre?.ac_amps ?? 0).toFixed(1)}A</td>
-							<td class="p-2">{(rtd.pre?.temp ?? 0).toFixed(1)}ºC</td>
-							<td class="p-2">{Math.round(rtd.pre?.fan_duty ?? 0)}%</td>
-							<td class="p-2">{Math.round(rtd.meter?.total_w ?? 0)}</td>
-							<td class="p-2">{rtd.meter?.phase_w != null ? Math.round(rtd.meter.phase_w) + 'W' : '—'}</td>
-							<td class="p-2">{rtd.meter?.charger_v != null ? rtd.meter.charger_v.toFixed(1) + 'V' : '—'}</td>
-							<td class="p-2">{rtd.meter?.charger_a != null ? rtd.meter.charger_a.toFixed(3) + 'A' : '—'}</td>
-							<td class="p-2">{rtd.meter?.charger_w != null ? Math.round(rtd.meter.charger_w) + 'W' : '—'}</td>
-							<td class="p-2">{rtd.meter?.efficiency != null ? rtd.meter.efficiency.toFixed(1) + '%' : '—'}</td>
-							<td class="p-2">{rtd.supervisory?.smart_export_request ? '✓' : '—'}</td>
-							<td class="p-2">{rtd.supervisory?.smart_export_excess_solar_request ? '✓' : '—'}</td>
-							<td class="p-2">{rtd.supervisory?.smart_charge_request ? '✓' : '—'}</td>
-							<td class="p-2">{rtd.supervisory?.ev_drain_protection_request ? '✓' : '—'}</td>
+						<tr style="border-bottom: 1px solid var(--color-surface-700);">
+							<td class="px-2 py-0.5 text-xs font-mono text-surface-400">{rtd.time}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{typeof rtd.chademo?.state === 'object' && rtd.chademo?.state !== null ? Object.keys(rtd.chademo.state)[0] : rtd.chademo?.state ?? '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{Math.round(rtd.chademo?.soc ?? 0)}%</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{(rtd.chademo?.x102?.charging_current_request ?? 0).toFixed(1)} A</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.pre?.state ?? '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{(rtd.pre?.dc_output_volts_setpoint ?? 0).toFixed(1)} V</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{(rtd.pre?.dc_output_volts ?? 0).toFixed(1)} V</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{(rtd.pre?.dc_output_amps_setpoint ?? 0).toFixed(1)} A</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{(rtd.pre?.dc_output_amps ?? 0).toFixed(1)} A</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{Math.round((rtd.pre?.dc_output_volts ?? 0) * (rtd.pre?.dc_output_amps ?? 0))} W</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.meter?.charger_w != null ? Math.round(rtd.meter.charger_w) + ' W' : '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{Math.round(rtd.meter?.total_w ?? 0)} W</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.supervisory?.smart_export_request ? '✓' : '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.supervisory?.smart_export_excess_solar_request ? '✓' : '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.supervisory?.smart_charge_request ? '✓' : '—'}</td>
+							<td class="px-2 py-0.5 text-xs font-mono">{rtd.supervisory?.ev_drain_protection_request ? '✓' : '—'}</td>
 						</tr>
 					{/each}
 				</tbody>
