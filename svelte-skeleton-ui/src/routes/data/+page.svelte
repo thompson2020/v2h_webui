@@ -146,6 +146,7 @@
 	connect();
 </script>
 
+<div class="overflow-x-auto">
 <div class="w-fit mx-auto px-2 py-4 space-y-6">
 
 <!-- ═══════════════════════════════════════════════════════════════════════════
@@ -643,6 +644,5 @@
 
 	</div>
 </div>
-
-
+</div>
 </div>

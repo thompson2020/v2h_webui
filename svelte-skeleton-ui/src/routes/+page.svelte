@@ -1,11 +1,5 @@
-<!--
-	Todo:
-		Implement Event Table actions (Edit, Delete, Add Event & Update)
--->
 <script lang="ts">
 	import { RangeSlider } from '@skeletonlabs/skeleton';
-	import { ListBoxItem, ListBox } from '@skeletonlabs/skeleton';
-	import { tableMapperValues } from '@skeletonlabs/skeleton';
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
 	import { operationalMode } from '$lib/stores';
@@ -235,16 +229,6 @@
 	let eventData = writable<EventData[]>([]);
 	let realTimeData = writable<RealTimeData[]>([]);
 
-	let sourceData = [
-		{ time: '00:01:59', action: 'Idle' },
-		{ time: '00:01:59', action: 'Idle' }
-	];
-	const tableSimple = {
-		head: ['Time', 'Action'],
-		body: tableMapperValues(sourceData, ['time', 'action']),
-		meta: tableMapperValues(sourceData, ['name', 'action'])
-	};
-
 	function sendSettings() {
 		if (!socket || socket.readyState !== WebSocket.OPEN) return;
 		socket.send(JSON.stringify({
@@ -404,7 +388,7 @@
 <div class="container mx-auto px-4 flex flex-wrap gap-2 justify-center" class:mt-12={!wsConnected}>
 
 	<!-- Operational Mode Card -->
-	<div class="card p-4 text-center w-72">
+	<div class="card p-4 text-center w-72 transition-opacity {!wsConnected ? 'opacity-40' : ''}">
 		<div class="text-2xl font-bold mb-1 inline-block rounded-lg px-4 py-1 {modePillClass}">{snapshotMode || '—'}</div>
 		<div class="text-xs text-surface-400 mb-4">{activeModeLabel}</div>
 		<div class="text-sm font-semibold text-surface-500 dark:text-surface-400 mb-1">Battery</div>
@@ -706,6 +690,7 @@
 		</div>
 	</div>
 
+	<!-- Event table: display only. Edit/delete/add not yet implemented. -->
 	{#if $eventData.length > 0}
 	<div class="flex-auto card p-10 max-h-[60vh] overflow-y-auto space-y-4">
 		<h2>Event Table</h2>
@@ -713,8 +698,6 @@
 			<thead>
 				<tr>
 					<th>Time</th><th>Action</th>
-					<th class="table-cell-fit">Edit</th>
-					<th class="table-cell-fit">Delete</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -722,16 +705,10 @@
 					<tr>
 						<td>{event.time}</td>
 						<td>{event.action}</td>
-						<td><button type="button" class="btn btn-sm">📝</button></td>
-						<td><button type="button" class="btn btn-sm">❌</button></td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
-		<div class="grid container-fluid">
-			<button id="addRowButton">Add Event</button>
-			<button id="updateButton">Update</button>
-		</div>
 	</div>
 	{/if}
 
