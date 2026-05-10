@@ -490,9 +490,6 @@
 					<RangeSlider name="soc-min" bind:value={v2h_soc_min} on:change={sendSettings} min={0} max={100} step={5} ticked>
 						<div class="flex justify-between items-center"><div class="text-xs">SoC Min</div><div class="text-xs">{v2h_soc_min}%</div></div>
 					</RangeSlider>
-					<RangeSlider name="soc-max-boost" bind:value={v2hBoostSocMax} on:change={sendSettings} min={0} max={100} step={5} ticked>
-						<div class="flex justify-between items-center"><div class="text-xs">SoC Max (Off-Peak / Smart Charge)</div><div class="text-xs">{v2hBoostSocMax}%</div></div>
-					</RangeSlider>
 					<RangeSlider name="soc-max" bind:value={v2h_soc_max} on:change={sendSettings} min={0} max={100} step={5} ticked>
 						<div class="flex justify-between items-center"><div class="text-xs">SoC Max (Solar)</div><div class="text-xs">{v2h_soc_max}%</div></div>
 					</RangeSlider>
@@ -579,6 +576,9 @@
 				</div>
 				{#if showOffPeakOptions}
 					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<RangeSlider name="soc-max-boost-offpeak" bind:value={v2hBoostSocMax} on:change={sendSettings} min={0} max={100} step={5} ticked>
+							<div class="flex justify-between items-center"><div class="text-xs">SoC Max (Off-Peak / Smart Charge)</div><div class="text-xs">{v2hBoostSocMax}%</div></div>
+						</RangeSlider>
 						<div class="flex justify-between items-center"><span>Start</span><input type="time" bind:value={offPeakStart} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" /></div>
 						<div class="flex justify-between items-center"><span>End</span><input type="time" bind:value={offPeakEnd} on:change={sendSettings} class="input w-28 text-sm py-0.5 px-1" /></div>
 					</div>
@@ -647,6 +647,11 @@
 				</div>
 				{#if showSmartChargeOptions}
 					<div class="mt-1 ml-4 text-xs text-surface-400">Charge during cheap import slots</div>
+					<div class="mt-2 ml-4 flex flex-col gap-2 text-surface-600 dark:text-surface-300">
+						<RangeSlider name="soc-max-boost-smartcharge" bind:value={v2hBoostSocMax} on:change={sendSettings} min={0} max={100} step={5} ticked>
+							<div class="flex justify-between items-center"><div class="text-xs">SoC Max (Off-Peak / Smart Charge)</div><div class="text-xs">{v2hBoostSocMax}%</div></div>
+						</RangeSlider>
+					</div>
 				{/if}
 			</div>
 
